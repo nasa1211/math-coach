@@ -1,10 +1,14 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import AuthGuard from '@/components/AuthGuard'; // 추가
+import AuthGuard from '@/components/AuthGuard';
+import { ThemeProvider } from '@/components/ThemeProvider'; // ThemeProvider 추가
 
 export const viewport: Viewport = {
-  themeColor: '#4f46e5',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#090d16' },
+  ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -36,9 +40,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
-      <body>
-        <AuthGuard>{children}</AuthGuard>
+    <html lang="ko" suppressHydrationWarning>
+      <body className="antialiased min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-colors">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <AuthGuard>{children}</AuthGuard>
+        </ThemeProvider>
       </body>
     </html>
   );
