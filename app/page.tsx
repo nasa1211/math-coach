@@ -156,6 +156,14 @@ export default function MathCoachPage() {
     }
   };
 
+  // 자물쇠 로그아웃 핸들러
+  const handleLogout = () => {
+    if (confirm("로그아웃하고 화면을 잠그시겠습니까?")) {
+      localStorage.removeItem("math_coach_auth");
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased font-sans">
       {/* 상단 네비게이션 */}
@@ -167,9 +175,23 @@ export default function MathCoachPage() {
               초·중등 수학 홈코치 AI
             </span>
           </div>
-          <span className="text-xs font-medium text-slate-500 hidden sm:inline-block">
-            초·중등 전 학년 수학 채점 & 학부모 지도 코칭 리포트
-          </span>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-slate-500 hidden sm:inline-block">
+              초·중등 전 학년 수학 채점 & 학부모 지도 코칭 리포트
+            </span>
+
+            {/* 자물쇠 잠금/로그아웃 버튼 */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="로그아웃 (화면 잠금)"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-red-600 bg-slate-100 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border border-slate-200/60"
+            >
+              <span>🔒</span>
+              <span>잠금</span>
+            </button>
+          </div>
         </div>
       </header>
 
