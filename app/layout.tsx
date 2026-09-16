@@ -1,12 +1,13 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import AuthGuard from '@/components/AuthGuard'; // 추가
 
 export const viewport: Viewport = {
   themeColor: '#4f46e5',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1, // 앱처럼 동작할 때 더블탭 줌 방지 (선택 사항)
+  maximumScale: 1,
 };
 
 export const metadata: Metadata = {
@@ -36,7 +37,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <AuthGuard>{children}</AuthGuard>
+      </body>
     </html>
   );
 }
