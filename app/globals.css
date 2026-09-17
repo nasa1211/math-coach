@@ -86,3 +86,16 @@ body {
 .animate-fadeIn {
   animation: fadeIn 0.25s ease-out forwards;
 }
+
+/* iOS Safe Area 하단 마진 보정 */
+.ios-safe-bottom {
+  /* 기본 모바일/구형 폰 대응 */
+  padding-bottom: 12px;
+  /* 최신 노치 및 다이내믹 아일랜드 아이폰 홈바 대응 */
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+/* 탭 바가 차지하는 높이만큼 메인 본문 하단 여백 확보 */
+.ios-safe-content-pb {
+  padding-bottom: calc(68px + max(12px, env(safe-area-inset-bottom)));
+}

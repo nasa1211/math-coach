@@ -281,7 +281,7 @@ export default function MathCoachPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors pb-20 landscape:pb-12">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb">
       {/* 1. 상단 네비게이션 헤더 */}
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors mobile-landscape-header">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
@@ -750,11 +750,11 @@ export default function MathCoachPage() {
       </main>
 
       {/* 3. 모바일 하단 탭 바 (스크롤 다운 시 transform으로 부드럽게 숨김 처리) */}
-      <nav
-        className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom,8px)] transition-transform duration-300 ease-in-out ${
-          showBottomNav ? "translate-y-0" : "translate-y-full"
-        }`}
-      >
+        <nav
+          className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
+            showBottomNav ? "translate-y-0" : "translate-y-full"
+          }`}
+        >
         <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 items-center px-4">
           <button
             type="button"

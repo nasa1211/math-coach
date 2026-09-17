@@ -34,6 +34,15 @@ export const metadata: Metadata = {
   },
 };
 
+// [중요] iOS Safe Area 인식을 위한 뷰포트 설정
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover", // <- 필수 선언
+};
+
 export default function RootLayout({
   children,
 }: {
