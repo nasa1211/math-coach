@@ -327,14 +327,18 @@ export default function MathCoachPage() {
                 </label>
               )}
 
-              <input
-                id="camera-input"
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                disabled={loading}
-                className="hidden"
-              />
+            <input
+              id="camera-input"
+              type="file"
+              accept="image/*"
+              onClick={(e) => {
+                // 모바일에서 같은 사진/카메라 재촬영 시에도 onChange가 무조건 발동하도록 초기화
+                (e.target as HTMLInputElement).value = "";
+              }}
+              onChange={handleFileChange}
+              disabled={loading}
+              className="hidden"
+            />
 
               <button
                 onClick={handleAnalyze}
