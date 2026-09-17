@@ -2,6 +2,7 @@
 
 import { useState, useEffect, ChangeEvent } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
+import MathText from "@/components/MathText";
 
 interface ProblemItem {
   problem_number: string;
@@ -409,9 +410,9 @@ export default function MathCoachPage() {
                       )}
                     </div>
 
-                    {/* 문제 요약 */}
-                    <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-mono">
-                      {prob.problem_text}
+                    {/* 문제 요약 (수식 렌더링 적용) */}
+                    <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans font-medium">
+                      <MathText content={prob.problem_text} />
                     </div>
 
                     {/* 모드별 차별화 영역 */}
@@ -422,21 +423,23 @@ export default function MathCoachPage() {
                           <span className="text-xs font-medium text-indigo-900 dark:text-indigo-200">
                             이 문제의 정답
                           </span>
-                          <span className="text-sm font-extrabold text-indigo-700 dark:text-indigo-300">
-                            {prob.correct_answer}
+                          <span className="text-base font-extrabold text-indigo-700 dark:text-indigo-300">
+                            <MathText content={prob.correct_answer} />
                           </span>
                         </div>
 
                         {prob.solution_steps && prob.solution_steps.length > 0 && (
-                          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/70 dark:border-slate-800 text-xs">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/70 dark:border-slate-800 text-sm">
                             <span className="font-bold text-slate-800 dark:text-slate-200 block mb-2">
                               📌 단계별 정석 풀이법
                             </span>
-                            <ul className="space-y-1.5 text-slate-700 dark:text-slate-300">
+                            <ul className="space-y-2 text-slate-700 dark:text-slate-300">
                               {prob.solution_steps.map((step, sIdx) => (
                                 <li key={sIdx} className="flex items-start gap-2 leading-relaxed">
-                                  <span className="text-indigo-600 dark:text-indigo-400 font-bold shrink-0">•</span>
-                                  <span>{step}</span>
+                                  <span className="text-indigo-600 dark:text-indigo-400 font-bold shrink-0 mt-0.5">•</span>
+                                  <span className="flex-1">
+                                    <MathText content={step} />
+                                  </span>
                                 </li>
                               ))}
                             </ul>
@@ -444,13 +447,13 @@ export default function MathCoachPage() {
                         )}
 
                         {prob.teaching_tip && (
-                          <div className="bg-amber-50/80 dark:bg-amber-950/30 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 text-xs">
+                          <div className="bg-amber-50/80 dark:bg-amber-950/30 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 text-sm">
                             <span className="font-bold text-amber-950 dark:text-amber-200 block mb-1.5 flex items-center gap-1.5">
                               <span>💡</span> 아이 지도 시 함정 포인트 & 팁
                             </span>
-                            <p className="text-amber-900 dark:text-amber-300 leading-relaxed">
-                              {prob.teaching_tip}
-                            </p>
+                            <div className="text-amber-900 dark:text-amber-300 leading-relaxed font-medium">
+                              <MathText content={prob.teaching_tip} />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -460,49 +463,59 @@ export default function MathCoachPage() {
                         <div className="grid grid-cols-2 gap-3 text-sm">
                           <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                             <span className="text-xs text-slate-400 dark:text-slate-500 block mb-0.5">아이의 답</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-200">{prob.student_answer}</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 text-base">
+                              <MathText content={prob.student_answer || ""} />
+                            </span>
                           </div>
                           <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                             <span className="text-xs text-indigo-400 dark:text-indigo-300 block mb-0.5">실제 정답</span>
-                            <span className="font-bold text-indigo-700 dark:text-indigo-300">{prob.correct_answer}</span>
+                            <span className="font-bold text-indigo-700 dark:text-indigo-300 text-base">
+                              <MathText content={prob.correct_answer} />
+                            </span>
                           </div>
                         </div>
 
                         {prob.solution_steps && prob.solution_steps.length > 0 && (
-                          <div className="bg-indigo-50/40 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-100/80 dark:border-indigo-900/40 text-xs">
+                          <div className="bg-indigo-50/40 dark:bg-indigo-950/30 p-4 rounded-xl border border-indigo-100/80 dark:border-indigo-900/40 text-sm">
                             <span className="font-bold text-indigo-950 dark:text-indigo-200 block mb-2 flex items-center gap-1.5">
                               <span>💡</span> 정답 도출 과정 (왜 이 답이 나올까요?)
                             </span>
-                            <ul className="space-y-1.5 text-slate-700 dark:text-slate-300">
+                            <ul className="space-y-2 text-slate-700 dark:text-slate-300">
                               {prob.solution_steps.map((step, sIdx) => (
                                 <li key={sIdx} className="flex items-start gap-2 leading-relaxed">
-                                  <span className="text-indigo-600 dark:text-indigo-400 font-bold shrink-0">•</span>
-                                  <span>{step}</span>
+                                  <span className="text-indigo-600 dark:text-indigo-400 font-bold shrink-0 mt-0.5">•</span>
+                                  <span className="flex-1">
+                                    <MathText content={step} />
+                                  </span>
                                 </li>
                               ))}
                             </ul>
                           </div>
                         )}
 
-                        <div className="text-xs space-y-1">
-                          <span className="font-bold text-slate-600 dark:text-slate-400 block">오개념 및 취약점 분석</span>
-                          <p className="text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                            {prob.error_analysis}
-                          </p>
-                        </div>
+                        {prob.error_analysis && (
+                          <div className="text-sm space-y-1">
+                            <span className="font-bold text-slate-600 dark:text-slate-400 block text-xs">오개념 및 취약점 분석</span>
+                            <div className="text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                              <MathText content={prob.error_analysis} />
+                            </div>
+                          </div>
+                        )}
 
                         {!prob.is_correct && prob.parent_script && (
                           <div className="bg-amber-50/80 dark:bg-amber-950/30 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50">
                             <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 mb-2.5 flex items-center gap-1.5">
                               <span>💬</span> 아이에게 이렇게 코칭해 보세요
                             </h4>
-                            <div className="space-y-2 text-xs text-amber-950 dark:text-amber-300">
+                            <div className="space-y-2 text-sm text-amber-950 dark:text-amber-300">
                               {prob.parent_script.map((step, sIdx) => (
-                                <div key={sIdx} className="flex gap-2 items-start">
-                                  <span className="bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold w-4 h-4 flex items-center justify-center rounded-full shrink-0 text-[10px] mt-0.5">
+                                <div key={sIdx} className="flex gap-2.5 items-start">
+                                  <span className="bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold w-5 h-5 flex items-center justify-center rounded-full shrink-0 text-xs mt-0.5">
                                     {sIdx + 1}
                                   </span>
-                                  <p className="leading-relaxed">{step}</p>
+                                  <div className="leading-relaxed flex-1">
+                                    <MathText content={step} />
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -514,15 +527,15 @@ export default function MathCoachPage() {
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
                               📝 쌍둥이 확인 문제
                             </span>
-                            <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                              {prob.twin_problem.question}
+                            <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                              <MathText content={prob.twin_problem.question} />
                             </div>
                             <details className="mt-2 text-xs text-slate-400 dark:text-slate-500 cursor-pointer group">
                               <summary className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400 font-medium select-none">
                                 쌍둥이 문제 정답 및 풀이 확인
                               </summary>
-                              <div className="mt-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 text-xs leading-relaxed">
-                                {prob.twin_problem.answer}
+                              <div className="mt-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
+                                <MathText content={prob.twin_problem.answer} />
                               </div>
                             </details>
                           </div>
