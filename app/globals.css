@@ -42,3 +42,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* react-image-crop 모바일 터치 핸들 최적화 */
+.ReactCrop__drag-handle {
+  width: 18px !important;
+  height: 18px !important;
+  background-color: #6366f1 !important; /* indigo-500 */
+  border: 2px solid #ffffff !important;
+  border-radius: 4px !important;
+}
+
+.ReactCrop__crop-selection {
+  border: 2px dashed #6366f1 !important;
+}
+

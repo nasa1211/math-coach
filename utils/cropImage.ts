@@ -1,49 +1,50 @@
 // utils/cropImage.ts
-import { Area } from "react-easy-crop";
-
-export const createImage = (url: string): Promise<HTMLImageElement> =>
-  new Promise((resolve, reject) => {
-    const image = new Image();
-    image.addEventListener("load", () => resolve(image));
-    image.addEventListener("error", (error) => reject(error));
-    image.setAttribute("crossOrigin", "anonymous");
-    image.src = url;
-  });
+import { PixelCrop } from "react-image-crop";
 
 export default async function getCroppedImg(
-  imageSrc: string,
-  pixelCrop: Area
+  image: HTMLImageElement,
+  crop: PixelCrop
 ): Promise<{ blob: Blob; url: string }> {
-  const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
   if (!ctx) {
-    throw new Error("캔버스 컨텍스트를 생성할 수 없습니다.");
+    throw new Error("Canvas context를 생성할 수 없습니다.");
   }
 
-  // 캔버스 크기를 잘라낸 영역 크기로 설정
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  // 화면에 렌더링된 이미지와 실제 원본 이미지 해상도의 비율 계산
+  const scaleX = image.naturalWidth / image.width;
+  const scaleY = image.naturalHeight / image.height;
 
-  // 원본 이미지에서 잘라낼 영역만 캔버스에 그리기
+  // 잘라낼 실제 픽셀 크기
+  const cropX = crop.x * scaleX;
+  const cropY = crop.y * scaleY;
+  const cropWidth = crop.width * scaleX;
+  const cropHeight = crop.height * scaleY;
+
+  canvas.width = Math.floor(cropWidth);
+  canvas.height = Math.floor(cropHeight);
+
+  // 안티앨리어싱 및 이미지 품질 보정
+  ctx.imageSmoothingQuality = "high";
+
   ctx.drawImage(
     image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
+    cropX,
+    cropY,
+    cropWidth,
+    cropHeight,
     0,
     0,
-    pixelCrop.width,
-    pixelCrop.height
+    Math.floor(cropWidth),
+    Math.floor(cropHeight)
   );
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error("캔버스 생성 실패"));
+          reject(new Error("캔버스 변환 실패"));
           return;
         }
         const fileUrl = URL.createObjectURL(blob);
