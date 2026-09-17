@@ -116,23 +116,44 @@ export default function MathCoachPage() {
   }, [loading, currentLoadingSteps.length]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
+    alert("1단계: handleFileChange 진입!");
 
-      // FileReader로 모바일 사진을 안전한 Base64 데이터로 변환
+    const files = e.target.files;
+    if (!files || files.length === 0) {
+      alert("⚠️ 파일이 선택되지 않았습니다.");
+      return;
+    }
+
+    const selectedFile = files[0];
+    alert(`2단계: 파일 감지 성공! 이름: ${selectedFile.name}, 용량: ${(selectedFile.size / 1024 / 1024).toFixed(2)}MB, 타입: ${selectedFile.type}`);
+
+    try {
       const reader = new FileReader();
+
+      reader.onloadstart = () => {
+        alert("3단계: FileReader 읽기 시작...");
+      };
+
       reader.onload = () => {
+        alert("4단계: FileReader 완료! 크롭 모달을 엽니다.");
         const base64Data = reader.result as string;
         setRawImageSrc(base64Data);
         setPreview(base64Data);
         setFile(selectedFile);
-        setIsCropperOpen(true); // 크롭 모달 확실히 오픈!
+        setIsCropperOpen(true);
       };
-      reader.readAsDataURL(selectedFile);
 
-      setResults(null);
-      setErrorMsg(null);
+      reader.onerror = (err) => {
+        alert(`❌ FileReader 에러 발생: ${JSON.stringify(err)}`);
+      };
+
+      reader.readAsDataURL(selectedFile);
+    } catch (err: any) {
+      alert(`❌ try-catch 예외: ${err?.message || err}`);
     }
+
+    setResults(null);
+    setErrorMsg(null);
   };
 
   const handleCropComplete = (croppedBlob: Blob, croppedUrl: string) => {
@@ -223,6 +244,10 @@ export default function MathCoachPage() {
 
       {/* 중앙 메인 컨테이너 */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        {/* 디버깅용 상태 모니터 (원인 파악 후 삭제 예정) */}
+        <div className="mb-4 p-2 bg-yellow-100 text-yellow-800 text-xs font-mono rounded">
+          디버그 상태 - isCropperOpen: {String(isCropperOpen)} | rawImageSrc 존재여부: {String(!!rawImageSrc)}
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* 좌측 패널: 모드 선택 + 업로드 */}
           <div className="lg:col-span-5 lg:sticky lg:top-24 space-y-4">
