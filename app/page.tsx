@@ -27,12 +27,14 @@ interface ProblemItem {
 interface AnalysisResponse {
   mode?: "grade" | "guide";
   problems: ProblemItem[];
+  modelUsed?: string;
 }
 
 const GRADE_LOADING_STEPS = [
   "문제집 이미지와 손글씨 풀이를 스캔하고 있습니다...",
   "초·중등 교육과정 단원을 분류하고 있습니다...",
   "정답 도출 수식과 아이 풀이를 정밀 대조하고 있습니다...",
+  "AI 모델 최적 경로 탐색 및 코칭 가이드 생성 중...",
   "학부모용 코칭 대화 가이드와 쌍둥이 문제를 생성하고 있습니다...",
 ];
 
@@ -40,6 +42,7 @@ const GUIDE_LOADING_STEPS = [
   "깨끗한 문제집 이미지를 스캔하고 있습니다...",
   "단원별 핵심 공식과 개념 원리를 정리하고 있습니다...",
   "단계별 정석 풀이법을 도출하고 있습니다...",
+  "AI 모델 최적 경로 탐색 및 지도 팁 정리 중...",
   "아이가 자주 빠지는 함정과 부모 지도 팁을 정리하고 있습니다...",
 ];
 
@@ -110,7 +113,7 @@ export default function MathCoachPage() {
       setStepIdx(0);
       interval = setInterval(() => {
         setStepIdx((prev) => (prev + 1) % currentLoadingSteps.length);
-      }, 1500);
+      }, 1600);
     }
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
@@ -119,14 +122,13 @@ export default function MathCoachPage() {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
 
-      // FileReader로 모바일 사진을 안전한 Base64 데이터로 변환
       const reader = new FileReader();
       reader.onload = () => {
         const base64Data = reader.result as string;
         setRawImageSrc(base64Data);
         setPreview(base64Data);
         setFile(selectedFile);
-        setIsCropperOpen(true); // 크롭 모달 확실히 오픈!
+        setIsCropperOpen(true);
       };
       reader.readAsDataURL(selectedFile);
 
@@ -166,7 +168,10 @@ export default function MathCoachPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `서버 오류 (상태코드: ${res.status})`);
+        throw new Error(
+          errorData.error ||
+            "일시적으로 AI 서버가 혼잡합니다. 잠시 후 다시 시도해 주세요."
+        );
       }
 
       const data: AnalysisResponse = await res.json();
@@ -174,7 +179,9 @@ export default function MathCoachPage() {
       setResultMode(data.mode || activeMode);
     } catch (err: any) {
       console.error("전송 에러:", err);
-      setErrorMsg(err.message || "분석 요청 중 오류가 발생했습니다.");
+      setErrorMsg(
+        err.message || "분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+      );
     } finally {
       setLoading(false);
     }
@@ -334,7 +341,7 @@ export default function MathCoachPage() {
                 </label>
               )}
 
-            <input
+              <input
                 id="camera-input"
                 type="file"
                 accept="image/*"
@@ -368,8 +375,9 @@ export default function MathCoachPage() {
               </button>
 
               {errorMsg && (
-                <div className="mt-3 p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs rounded-lg border border-red-100 dark:border-red-900/50 text-center">
-                  {errorMsg}
+                <div className="mt-3 p-3.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs rounded-xl border border-red-100 dark:border-red-900/50 text-center space-y-1">
+                  <p className="font-bold">⚠️ 안내</p>
+                  <p>{errorMsg}</p>
                 </div>
               )}
             </div>
