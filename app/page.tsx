@@ -137,25 +137,27 @@ export default function MathCoachPage() {
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
 
-  // 스크롤 이벤트 리스너 등록
+  // 스크롤 이벤트 리스너: PC(768px 이상)에서는 실행 중단
   useEffect(() => {
     const handleScroll = () => {
+      // 데스크톱 브라우저 폭(768px 이상)일 때는 항상 노출 유지
+      if (window.innerWidth >= 768) {
+        setShowBottomNav(true);
+        return;
+      }
+
       const currentScrollY = window.scrollY;
-      
-      // 최상단 근처일 때는 항상 노출
+
       if (currentScrollY < 20) {
         setShowBottomNav(true);
         lastScrollY.current = currentScrollY;
         return;
       }
 
-      // 10px 이상 변화가 있을 때만 반응 (민감도 조절)
       if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
         if (currentScrollY > lastScrollY.current) {
-          // 아래로 스크롤 시 숨김
-          setShowBottomNav(false);
+          setShowBottomNav(false); // 모바일에서만 숨김
         } else {
-          // 위로 스크롤 시 다시 표시
           setShowBottomNav(true);
         }
         lastScrollY.current = currentScrollY;
@@ -751,7 +753,7 @@ export default function MathCoachPage() {
 
       {/* 3. 하단 탭 바: 모바일에서는 스크롤 시 숨김, PC(md 이상)에서는 항상 고정 노출 */}
         <nav
-          className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom md:transform-none ${
+          className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom md:!translate-y-0 ${
             showBottomNav ? "translate-y-0" : "translate-y-full"
           }`}
         >
