@@ -2,7 +2,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import AuthGuard from '@/components/AuthGuard';
-import { ThemeProvider } from '@/components/ThemeProvider'; // ThemeProvider 추가
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const viewport: Viewport = {
   themeColor: [
@@ -12,6 +12,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover', // 필수 통합 선언
 };
 
 export const metadata: Metadata = {
@@ -32,15 +34,6 @@ export const metadata: Metadata = {
       { url: '/icon-192.png?v=1', sizes: '192x192', type: 'image/png' },
     ],
   },
-};
-
-// [중요] iOS Safe Area 인식을 위한 뷰포트 설정
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover", // <- 필수 선언
 };
 
 export default function RootLayout({

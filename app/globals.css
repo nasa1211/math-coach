@@ -87,15 +87,15 @@ body {
   animation: fadeIn 0.25s ease-out forwards;
 }
 
-/* iOS Safe Area 하단 마진 보정 */
+/* iOS Safe Area 대응 */
 .ios-safe-bottom {
-  /* 기본 모바일/구형 폰 대응 */
-  padding-bottom: 12px;
-  /* 최신 노치 및 다이내믹 아일랜드 아이폰 홈바 대응 */
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  padding-bottom: 20px; /* 기본 fallback */
+  padding-bottom: max(16px, constant(safe-area-inset-bottom)); /* 구형 iOS */
+  padding-bottom: max(16px, env(safe-area-inset-bottom));      /* 신형 iOS */
 }
 
-/* 탭 바가 차지하는 높이만큼 메인 본문 하단 여백 확보 */
 .ios-safe-content-pb {
-  padding-bottom: calc(68px + max(12px, env(safe-area-inset-bottom)));
+  padding-bottom: calc(70px + 20px);
+  padding-bottom: calc(70px + max(16px, constant(safe-area-inset-bottom)));
+  padding-bottom: calc(70px + max(16px, env(safe-area-inset-bottom)));
 }
