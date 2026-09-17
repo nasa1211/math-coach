@@ -118,11 +118,18 @@ export default function MathCoachPage() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      const objectUrl = URL.createObjectURL(selectedFile);
-      setFile(selectedFile);
-      setRawImageSrc(objectUrl);
-      setPreview(objectUrl);
-      setIsCropperOpen(true); // 사진 선택 시 바로 크롭 모달 오픈
+
+      // FileReader로 모바일 사진을 안전한 Base64 데이터로 변환
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Data = reader.result as string;
+        setRawImageSrc(base64Data);
+        setPreview(base64Data);
+        setFile(selectedFile);
+        setIsCropperOpen(true); // 크롭 모달 확실히 오픈!
+      };
+      reader.readAsDataURL(selectedFile);
+
       setResults(null);
       setErrorMsg(null);
     }
@@ -328,17 +335,16 @@ export default function MathCoachPage() {
               )}
 
             <input
-              id="camera-input"
-              type="file"
-              accept="image/*"
-              onClick={(e) => {
-                // 모바일에서 같은 사진/카메라 재촬영 시에도 onChange가 무조건 발동하도록 초기화
-                (e.target as HTMLInputElement).value = "";
-              }}
-              onChange={handleFileChange}
-              disabled={loading}
-              className="hidden"
-            />
+                id="camera-input"
+                type="file"
+                accept="image/*"
+                onClick={(e) => {
+                  (e.target as HTMLInputElement).value = "";
+                }}
+                onChange={handleFileChange}
+                disabled={loading}
+                className="hidden"
+              />
 
               <button
                 onClick={handleAnalyze}
@@ -605,11 +611,13 @@ export default function MathCoachPage() {
 
       {/* 이미지 자르기(Crop) 모달 */}
       {isCropperOpen && rawImageSrc && (
-        <ImageCropperModal
-          imageSrc={rawImageSrc}
-          onCropComplete={handleCropComplete}
-          onCancel={() => setIsCropperOpen(false)}
-        />
+        <div className="relative z-[9999]">
+          <ImageCropperModal
+            imageSrc={rawImageSrc}
+            onCropComplete={handleCropComplete}
+            onCancel={() => setIsCropperOpen(false)}
+          />
+        </div>
       )}
     </div>
   );
