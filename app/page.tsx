@@ -533,39 +533,47 @@ export default function MathCoachPage() {
                     }}
                     className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white">
-                          {prob.problem_number || `${idx + 1}번`}
-                        </span>
-                        <span className="text-xs bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/60 px-2.5 py-0.5 rounded-full font-medium">
-                          {prob.concept}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {resultMode === "grade" && (
-                          <span
-                            className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                              prob.is_correct
-                                ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200/60 dark:border-green-800/40"
-                                : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40"
-                            }`}
-                          >
-                            {prob.is_correct ? "정답" : "오답 코칭 필요"}
+                    {/* 문항 카드 목록 내부 상단 헤더 */}
+                    <div className="space-y-2.5 pb-1 border-b border-slate-100 dark:border-slate-800/60">
+                      {/* 1행: 문항 번호 + 정오답 상태 + 우측 공유/저장 버튼 */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-extrabold text-slate-900 dark:text-white shrink-0">
+                            {prob.problem_number || `${idx + 1}번`}
                           </span>
-                        )}
+                          {resultMode === "grade" && (
+                            <span
+                              className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap shrink-0 ${
+                                prob.is_correct
+                                  ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200/60 dark:border-green-800/40"
+                                  : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40"
+                              }`}
+                            >
+                              {prob.is_correct ? "정답" : "오답 코칭 필요"}
+                            </span>
+                          )}
+                        </div>
 
+                        {/* 공유/저장 버튼: shrink-0과 whitespace-nowrap으로 가로 형태 영구 보장 */}
                         <button
                           type="button"
                           onClick={() => handleShareCard(idx)}
                           disabled={exportingIdx !== null}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 border border-slate-200/60 dark:border-slate-700 cursor-pointer disabled:opacity-50"
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 border border-slate-200/80 dark:border-slate-700 cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
                         >
                           <span>{exportingIdx === idx ? "⏳" : "📤"}</span>
-                          <span>공유/저장</span>
+                          <span>{exportingIdx === idx ? "저장 중..." : "공유/저장"}</span>
                         </button>
                       </div>
+
+                      {/* 2행: 단원 및 핵심 개념 뱃지 (긴 텍스트도 줄바꿈 없이 깔끔하게 표시) */}
+                      {prob.concept && (
+                        <div className="flex flex-wrap items-center">
+                          <span className="text-xs bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 px-2.5 py-1 rounded-lg font-medium leading-relaxed">
+                            {prob.concept}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans font-medium">
