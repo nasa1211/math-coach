@@ -2,6 +2,22 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* =========================================
+   전체 폰트 크기 일괄 스케일업
+   기본 16px -> 17.5px (모바일 가독성 최적화)
+   ========================================= */
+html {
+  font-size: 17.5px; /* 기본값(16px)보다 약 10% 확대 */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 태블릿/데스크톱(큰 화면)에서는 조금 더 시원하게 18px로 확장 */
+@media (min-width: 768px) {
+  html {
+    font-size: 18px;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
