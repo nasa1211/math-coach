@@ -56,3 +56,17 @@ body {
   border: 2px dashed #6366f1 !important;
 }
 
+/* 모바일 가로모드 (세로 높이가 500px 이하인 폰) 최적화 */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  /* 1. 헤더 sticky 해제 -> 스크롤 시작 즉시 위로 사라짐 */
+  .mobile-landscape-header {
+    position: static !important;
+    top: auto !important;
+  }
+
+  /* 2. 좌측 패널 sticky 해제 -> 화면 갇힘 현상 방지 */
+  .mobile-landscape-sticky-reset {
+    position: static !important;
+    top: auto !important;
+  }
+}

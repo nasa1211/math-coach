@@ -255,35 +255,32 @@ export default function MathCoachPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors">
+
     {/* 상단 네비게이션 */}
-    <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 landscape:py-1.5 flex items-center justify-between">
-        {/* 타이틀 영역: 가로모드에서는 아이콘과 글자 크기를 컴팩트하게 축소 */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-xl landscape:text-lg sm:text-2xl">📐</span>
-          <span className="text-base landscape:text-sm sm:text-xl font-extrabold text-indigo-700 dark:text-indigo-400 tracking-tight">
-            수학 홈코치 AI
+    <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors mobile-landscape-header">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">📐</span>
+          <span className="text-xl font-extrabold text-indigo-700 dark:text-indigo-400 tracking-tight">
+            초·중등 수학 홈코치 AI
           </span>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* 긴 설명 문구는 가로모드 폰(세로 높이가 낮을 때)에서는 완전히 숨김 */}
           <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden md:inline-block">
             초·중등 전 학년 수학 채점 & 학부모 지도 코칭 리포트
           </span>
 
-          {/* 테마 토글 */}
           <ThemeToggle />
 
-          {/* 잠금 버튼: 가로모드에서는 패딩을 줄여 높이 최소화 */}
           <button
             type="button"
             onClick={handleLogout}
             title="로그아웃 (화면 잠금)"
-            className="flex items-center gap-1 px-2.5 py-1 landscape:py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer border border-slate-200/60 dark:border-slate-700"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer border border-slate-200/60 dark:border-slate-700"
           >
             <span>🔒</span>
-            <span className="hidden sm:inline">잠금</span>
+            <span>잠금</span>
           </button>
         </div>
       </div>
@@ -292,8 +289,8 @@ export default function MathCoachPage() {
       {/* 중앙 메인 컨테이너 */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 landscape:py-3">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* 좌측 패널: 모드 선택 + 업로드 */}
-          <div className="lg:col-span-5 lg:sticky lg:top-24 space-y-4">
+            {/* 좌측 패널: 모드 선택 + 업로드 */}
+            <div className="lg:col-span-5 lg:sticky lg:top-24 space-y-4 mobile-landscape-sticky-reset">
             {/* 모드 전환 탭 */}
             <div className="bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 shadow-inner transition-colors">
               <button
