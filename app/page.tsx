@@ -1,4 +1,3 @@
-// app/page.tsx
 "use client";
 
 import { useState, useEffect, useRef, ChangeEvent } from "react";
@@ -13,7 +12,6 @@ interface ProblemItem {
   correct_answer: string;
   solution_steps: string[];
   concept: string;
-  // 채점 모드 전용 필드
   student_answer?: string;
   is_correct?: boolean;
   error_analysis?: string;
@@ -22,7 +20,6 @@ interface ProblemItem {
     question: string;
     answer: string;
   };
-  // 사전 지도 모드 전용 필드
   teaching_tip?: string;
 }
 
@@ -51,7 +48,7 @@ const GUIDE_LOADING_STEPS = [
 ];
 
 async function compressImage(file: File): Promise<Blob> {
-  const SAFE_LIMIT = 4.0 * 1024 * 1024; // 4.0MB 한도 세이프가드
+  const SAFE_LIMIT = 4.0 * 1024 * 1024;
 
   if (file.name === "cropped.jpg" && file.size <= SAFE_LIMIT) {
     return file;
@@ -119,6 +116,10 @@ export default function MathCoachPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
+  // [방법 B 핵심]: 스크롤 방향 감지 및 하단탭 표시 상태 제어
+  const [showBottomNav, setShowBottomNav] = useState(true);
+  const lastScrollY = useRef(0);
+
   const reportContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
 
@@ -135,6 +136,35 @@ export default function MathCoachPage() {
     }
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
+
+  // 스크롤 이벤트 리스너 등록
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // 최상단 근처일 때는 항상 노출
+      if (currentScrollY < 20) {
+        setShowBottomNav(true);
+        lastScrollY.current = currentScrollY;
+        return;
+      }
+
+      // 10px 이상 변화가 있을 때만 반응 (민감도 조절)
+      if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
+        if (currentScrollY > lastScrollY.current) {
+          // 아래로 스크롤 시 숨김
+          setShowBottomNav(false);
+        } else {
+          // 위로 스크롤 시 다시 표시
+          setShowBottomNav(true);
+        }
+        lastScrollY.current = currentScrollY;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -169,7 +199,7 @@ export default function MathCoachPage() {
 
     setLoading(true);
     setErrorMsg(null);
-    setActiveTab("result"); // 분석 시작 시 결과 화면으로 전환
+    setActiveTab("result");
 
     try {
       const compressedBlob = await compressImage(file);
@@ -251,7 +281,7 @@ export default function MathCoachPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors pb-24">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors pb-20 landscape:pb-12">
       {/* 1. 상단 네비게이션 헤더 */}
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors mobile-landscape-header">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
@@ -282,14 +312,11 @@ export default function MathCoachPage() {
         </div>
       </header>
 
-      {/* 2. 메인 컨텐츠 영역 (선택된 하단 탭에 따라 뷰 렌더링) */}
+      {/* 2. 메인 컨텐츠 영역 */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {/* ====================================================
-            TAB 1: [문제 촬영 & 분석 설정] 뷰
-        ==================================================== */}
+        {/* TAB 1: 문제 촬영 */}
         {activeTab === "camera" && (
           <div className="space-y-4 max-w-xl mx-auto animate-fadeIn">
-            {/* 모드 전환 탭 */}
             <div className="bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 shadow-inner transition-colors">
               <button
                 type="button"
@@ -325,7 +352,6 @@ export default function MathCoachPage() {
               </button>
             </div>
 
-            {/* 업로드 카드 */}
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
               <div className="mb-4">
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
@@ -437,9 +463,7 @@ export default function MathCoachPage() {
           </div>
         )}
 
-        {/* ====================================================
-            TAB 2: [분석 결과 리포트] 뷰
-        ==================================================== */}
+        {/* TAB 2: 분석 결과 리포트 */}
         {activeTab === "result" && (
           <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
             {loading ? (
@@ -463,7 +487,6 @@ export default function MathCoachPage() {
               </div>
             ) : results && results.length > 0 ? (
               <div className="space-y-6" ref={reportContainerRef}>
-                {/* 결과 상단 헤더 및 공유 바 */}
                 <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -502,7 +525,6 @@ export default function MathCoachPage() {
                   </div>
                 </div>
 
-                {/* 문항 카드 목록 */}
                 {results.map((prob, idx) => (
                   <article
                     key={idx}
@@ -599,7 +621,7 @@ export default function MathCoachPage() {
                               <MathText content={prob.student_answer || ""} />
                             </span>
                           </div>
-                          <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-3 rounded-2xl border border-indigo-100 dark:border-indigo-900/50">
+                          <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                             <span className="text-xs text-indigo-400 dark:text-indigo-300 block mb-0.5">실제 정답</span>
                             <span className="font-bold text-indigo-700 dark:text-indigo-300 text-base">
                               <MathText content={prob.correct_answer} />
@@ -678,7 +700,6 @@ export default function MathCoachPage() {
                 ))}
               </div>
             ) : (
-              /* 아직 결과가 없을 때의 Empty State */
               <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center p-12 text-center text-slate-400 dark:text-slate-500 bg-white/50 dark:bg-slate-900/30">
                 <span className="text-5xl mb-4">📊</span>
                 <p className="text-base font-bold text-slate-700 dark:text-slate-200">
@@ -699,9 +720,7 @@ export default function MathCoachPage() {
           </div>
         )}
 
-        {/* ====================================================
-            TAB 3: [최근 기록 (히스토리)] 확장용 뷰
-        ==================================================== */}
+        {/* TAB 3: 최근 기록 */}
         {activeTab === "history" && (
           <div className="max-w-xl mx-auto space-y-4 animate-fadeIn">
             <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4">
@@ -722,10 +741,13 @@ export default function MathCoachPage() {
         )}
       </main>
 
-      {/* 3. 모바일 앱 스타일 하단 고정 네비게이션 바 (Bottom Tab Bar) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom,8px)] transition-colors">
-        <div className="max-w-md mx-auto grid grid-cols-3 h-16 items-center px-4">
-          {/* 탭 1: 문제 촬영 */}
+      {/* 3. 모바일 하단 탭 바 (스크롤 다운 시 transform으로 부드럽게 숨김 처리) */}
+      <nav
+        className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom,8px)] transition-transform duration-300 ease-in-out ${
+          showBottomNav ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 items-center px-4">
           <button
             type="button"
             onClick={() => setActiveTab("camera")}
@@ -735,11 +757,10 @@ export default function MathCoachPage() {
                 : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
             }`}
           >
-            <span className="text-xl sm:text-2xl">📷</span>
-            <span className="text-[11px] font-bold mt-0.5">문제 촬영</span>
+            <span className="text-xl sm:text-2xl landscape:text-lg">📷</span>
+            <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">문제 촬영</span>
           </button>
 
-          {/* 탭 2: 분석 결과 */}
           <button
             type="button"
             onClick={() => setActiveTab("result")}
@@ -749,16 +770,15 @@ export default function MathCoachPage() {
                 : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
             }`}
           >
-            <span className="text-xl sm:text-2xl">📊</span>
-            <span className="text-[11px] font-bold mt-0.5">분석 결과</span>
+            <span className="text-xl sm:text-2xl landscape:text-lg">📊</span>
+            <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">분석 결과</span>
             {results && results.length > 0 && (
-              <span className="absolute top-2 right-6 w-4 h-4 bg-indigo-600 text-white text-[9px] font-extrabold flex items-center justify-center rounded-full">
+              <span className="absolute top-2 right-6 landscape:top-1 landscape:right-8 w-4 h-4 bg-indigo-600 text-white text-[9px] font-extrabold flex items-center justify-center rounded-full">
                 {results.length}
               </span>
             )}
           </button>
 
-          {/* 탭 3: 최근 기록 */}
           <button
             type="button"
             onClick={() => setActiveTab("history")}
@@ -768,13 +788,13 @@ export default function MathCoachPage() {
                 : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
             }`}
           >
-            <span className="text-xl sm:text-2xl">🕒</span>
-            <span className="text-[11px] font-bold mt-0.5">최근 기록</span>
+            <span className="text-xl sm:text-2xl landscape:text-lg">🕒</span>
+            <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">최근 기록</span>
           </button>
         </div>
       </nav>
 
-      {/* 4. 이미지 자르기(Crop) 모달 */}
+      {/* 4. 이미지 자르기 모달 */}
       {isCropperOpen && rawImageSrc && (
         <div className="relative z-[9999]">
           <ImageCropperModal
