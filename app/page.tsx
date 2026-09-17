@@ -749,9 +749,9 @@ export default function MathCoachPage() {
         )}
       </main>
 
-      {/* 3. 모바일 하단 탭 바 (스크롤 다운 시 transform으로 부드럽게 숨김 처리) */}
+      {/* 3. 하단 탭 바: 모바일에서는 스크롤 시 숨김, PC(md 이상)에서는 항상 고정 노출 */}
         <nav
-          className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
+          className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom md:transform-none ${
             showBottomNav ? "translate-y-0" : "translate-y-full"
           }`}
         >
