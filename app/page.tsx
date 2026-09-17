@@ -1,3 +1,4 @@
+// app/page.tsx
 "use client";
 
 import { useState, useEffect, useRef, ChangeEvent } from "react";
@@ -29,6 +30,15 @@ interface AnalysisResponse {
   modelUsed?: string;
 }
 
+// 히스토리 항목 인터페이스
+interface HistoryRecord {
+  id: string;
+  timestamp: number;
+  mode: "grade" | "guide";
+  problems: ProblemItem[];
+  summaryTitle: string;
+}
+
 type TabType = "camera" | "result" | "history";
 
 const GRADE_LOADING_STEPS = [
@@ -46,6 +56,8 @@ const GUIDE_LOADING_STEPS = [
   "AI 모델 최적 경로 탐색 및 지도 팁 정리 중...",
   "아이가 자주 빠지는 함정과 부모 지도 팁을 정리하고 있습니다...",
 ];
+
+const STORAGE_KEY = "math_coach_history_v1";
 
 async function compressImage(file: File): Promise<Blob> {
   const SAFE_LIMIT = 4.0 * 1024 * 1024;
@@ -116,7 +128,10 @@ export default function MathCoachPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
-  // [방법 B 핵심]: 스크롤 방향 감지 및 하단탭 표시 상태 제어
+  // 최근 기록(히스토리) 상태
+  const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
+
+  // 스크롤 감지 및 하단 탭 숨김 제어
   const [showBottomNav, setShowBottomNav] = useState(true);
   const lastScrollY = useRef(0);
 
@@ -126,6 +141,19 @@ export default function MathCoachPage() {
   const currentLoadingSteps =
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
 
+  // 로컬 스토리지에서 기록 불러오기
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        setHistoryList(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error("히스토리 로드 실패:", e);
+    }
+  }, []);
+
+  // 로딩 단계 텍스트 롤링
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (loading) {
@@ -137,17 +165,15 @@ export default function MathCoachPage() {
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
 
-  // 스크롤 이벤트 리스너: PC(768px 이상)에서는 실행 중단
+  // 스크롤 이벤트 (PC 데스크톱 제외)
   useEffect(() => {
     const handleScroll = () => {
-      // 데스크톱 브라우저 폭(768px 이상)일 때는 항상 노출 유지
       if (window.innerWidth >= 768) {
         setShowBottomNav(true);
         return;
       }
 
       const currentScrollY = window.scrollY;
-
       if (currentScrollY < 20) {
         setShowBottomNav(true);
         lastScrollY.current = currentScrollY;
@@ -156,7 +182,7 @@ export default function MathCoachPage() {
 
       if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
         if (currentScrollY > lastScrollY.current) {
-          setShowBottomNav(false); // 모바일에서만 숨김
+          setShowBottomNav(false);
         } else {
           setShowBottomNav(true);
         }
@@ -167,6 +193,63 @@ export default function MathCoachPage() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // 새 분석 결과 로컬 히스토리에 저장
+  const saveToHistory = (mode: "grade" | "guide", problems: ProblemItem[]) => {
+    if (!problems || problems.length === 0) return;
+
+    const firstProb = problems[0];
+    const summaryTitle =
+      firstProb.concept ||
+      (firstProb.problem_text
+        ? firstProb.problem_text.slice(0, 30) + "..."
+        : `${problems.length}개 문항 분석`);
+
+    const newRecord: HistoryRecord = {
+      id: "rec_" + Date.now(),
+      timestamp: Date.now(),
+      mode,
+      problems,
+      summaryTitle,
+    };
+
+    setHistoryList((prev) => {
+      const updated = [newRecord, ...prev].slice(0, 30); // 최근 30개 유지
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {
+        console.error("히스토리 저장 실패:", e);
+      }
+      return updated;
+    });
+  };
+
+  // 특정 히스토리 항목 불러오기
+  const handleLoadHistoryItem = (item: HistoryRecord) => {
+    setResults(item.problems);
+    setResultMode(item.mode);
+    setActiveTab("result");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // 특정 히스토리 삭제
+  const handleDeleteHistoryItem = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!confirm("이 분석 기록을 삭제하시겠습니까?")) return;
+
+    setHistoryList((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // 전체 히스토리 삭제
+  const handleClearAllHistory = () => {
+    if (!confirm("모든 분석 기록을 삭제하시겠습니까?")) return;
+    setHistoryList([]);
+    localStorage.removeItem(STORAGE_KEY);
+  };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -226,8 +309,14 @@ export default function MathCoachPage() {
       }
 
       const data: AnalysisResponse = await res.json();
-      setResults(data.problems || []);
-      setResultMode(data.mode || activeMode);
+      const parsedProblems = data.problems || [];
+      const appliedMode = data.mode || activeMode;
+
+      setResults(parsedProblems);
+      setResultMode(appliedMode);
+
+      // 분석 성공 시 히스토리에 자동 추가
+      saveToHistory(appliedMode, parsedProblems);
     } catch (err: any) {
       console.error("전송 에러:", err);
       setErrorMsg(
@@ -316,7 +405,9 @@ export default function MathCoachPage() {
 
       {/* 2. 메인 컨텐츠 영역 */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {/* TAB 1: 문제 촬영 */}
+        {/* ==========================================
+            TAB 1: [문제 촬영]
+        ========================================== */}
         {activeTab === "camera" && (
           <div className="space-y-4 max-w-xl mx-auto animate-fadeIn">
             <div className="bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 shadow-inner transition-colors">
@@ -465,7 +556,9 @@ export default function MathCoachPage() {
           </div>
         )}
 
-        {/* TAB 2: 분석 결과 리포트 */}
+        {/* ==========================================
+            TAB 2: [분석 결과 리포트]
+        ========================================== */}
         {activeTab === "result" && (
           <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
             {loading ? (
@@ -535,9 +628,8 @@ export default function MathCoachPage() {
                     }}
                     className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
-                    {/* 문항 카드 목록 내부 상단 헤더 */}
+                    {/* 가로 찌그러짐을 수정한 2행 구조 헤더 */}
                     <div className="space-y-2.5 pb-1 border-b border-slate-100 dark:border-slate-800/60">
-                      {/* 1행: 문항 번호 + 정오답 상태 + 우측 공유/저장 버튼 */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-extrabold text-slate-900 dark:text-white shrink-0">
@@ -556,7 +648,6 @@ export default function MathCoachPage() {
                           )}
                         </div>
 
-                        {/* 공유/저장 버튼: shrink-0과 whitespace-nowrap으로 가로 형태 영구 보장 */}
                         <button
                           type="button"
                           onClick={() => handleShareCard(idx)}
@@ -568,7 +659,6 @@ export default function MathCoachPage() {
                         </button>
                       </div>
 
-                      {/* 2행: 단원 및 핵심 개념 뱃지 (긴 텍스트도 줄바꿈 없이 깔끔하게 표시) */}
                       {prob.concept && (
                         <div className="flex flex-wrap items-center">
                           <span className="text-xs bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 px-2.5 py-1 rounded-lg font-medium leading-relaxed">
@@ -721,7 +811,7 @@ export default function MathCoachPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab("camera")}
-                  className="mt-6 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors"
+                  className="mt-6 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors cursor-pointer"
                 >
                   문제 촬영하러 가기
                 </button>
@@ -730,34 +820,121 @@ export default function MathCoachPage() {
           </div>
         )}
 
-        {/* TAB 3: 최근 기록 */}
+        {/* ==========================================
+            TAB 3: [최근 기록 (히스토리)] 뷰
+        ========================================== */}
         {activeTab === "history" && (
           <div className="max-w-xl mx-auto space-y-4 animate-fadeIn">
-            <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4">
-              <span className="text-5xl">🕒</span>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                최근 코칭 기록 보관함
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
-                이전에 분석했던 문제와 오답 코칭 리포트를 언제든지 다시 열어볼 수 있는 히스토리 보관함 공간입니다.
-              </p>
-              <div className="pt-2">
-                <span className="text-xs font-semibold px-3 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-full border border-indigo-200/50 dark:border-indigo-800/50">
-                  기록 연동 준비 완료
-                </span>
+            <div className="flex items-center justify-between pb-2">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>🕒</span>
+                  <span>최근 코칭 기록</span>
+                  <span className="text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-semibold">
+                    {historyList.length}개
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                  최근 분석한 최대 30개의 코칭 리포트를 보관합니다.
+                </p>
               </div>
+
+              {historyList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllHistory}
+                  className="text-xs font-semibold text-slate-400 hover:text-red-600 dark:hover:text-red-400 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+                >
+                  전체 삭제
+                </button>
+              )}
             </div>
+
+            {historyList.length > 0 ? (
+              <div className="space-y-3">
+                {historyList.map((item) => {
+                  const correctCount = item.problems.filter((p) => p.is_correct).length;
+                  const totalCount = item.problems.length;
+                  const dateStr = new Date(item.timestamp).toLocaleString("ko-KR", {
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => handleLoadHistoryItem(item)}
+                      className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 shadow-sm transition-all cursor-pointer group flex items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                              item.mode === "guide"
+                                ? "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300"
+                                : "bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300"
+                            }`}
+                          >
+                            {item.mode === "guide" ? "사전 지도" : "채점 코칭"}
+                          </span>
+
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            {dateStr}
+                          </span>
+
+                          {item.mode === "grade" && (
+                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                              (정답 {correctCount}/{totalCount})
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {item.summaryTitle}
+                        </p>
+
+                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                          총 {item.problems.length}개 문제 리포트 보관 중
+                        </p>
+                      </div>
+
+                      {/* 삭제 버튼 */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteHistoryItem(e, item.id)}
+                        title="기록 삭제"
+                        className="p-2 text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-slate-900 p-10 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
+                <span className="text-4xl">🕒</span>
+                <h4 className="text-base font-bold text-slate-700 dark:text-slate-200">
+                  저장된 분석 기록이 없습니다
+                </h4>
+                <p className="text-xs text-slate-400 dark:text-slate-500 max-w-xs mx-auto">
+                  문제집을 촬영하고 분석을 완료하면 이곳에 자동으로 차곡차곡 기록됩니다.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </main>
 
-      {/* 3. 하단 탭 바: 모바일에서는 스크롤 시 숨김, PC(md 이상)에서는 항상 고정 노출 */}
-        <nav
-          className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom md:!translate-y-0 ${
-            showBottomNav ? "translate-y-0" : "translate-y-full"
-          }`}
-        >
-        <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 items-center px-4">
+      {/* 3. 모바일 하단 탭 바 */}
+      <nav
+        className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom md:!translate-y-0 ${
+          showBottomNav ? "translate-y-0" : "translate-y-full"
+        }`}
+      >
+        <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 md:h-16 items-center px-4">
           <button
             type="button"
             onClick={() => setActiveTab("camera")}
@@ -792,7 +969,7 @@ export default function MathCoachPage() {
           <button
             type="button"
             onClick={() => setActiveTab("history")}
-            className={`flex flex-col items-center justify-center h-full transition-all cursor-pointer ${
+            className={`relative flex flex-col items-center justify-center h-full transition-all cursor-pointer ${
               activeTab === "history"
                 ? "text-indigo-600 dark:text-indigo-400 scale-105"
                 : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
@@ -800,6 +977,9 @@ export default function MathCoachPage() {
           >
             <span className="text-xl sm:text-2xl landscape:text-lg">🕒</span>
             <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">최근 기록</span>
+            {historyList.length > 0 && (
+              <span className="absolute top-2 right-6 landscape:top-1 landscape:right-8 w-2 h-2 bg-indigo-500 rounded-full" />
+            )}
           </button>
         </div>
       </nav>
