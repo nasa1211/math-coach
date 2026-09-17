@@ -48,14 +48,13 @@ const GUIDE_LOADING_STEPS = [
   "아이가 자주 빠지는 함정과 부모 지도 팁을 정리하고 있습니다...",
 ];
 
-// app/page.tsx 상단 compressImage 교체
+// app/page.tsx 상단 compressImage 함수 교체
 async function compressImage(file: File): Promise<Blob> {
-  // 사용자가 이미 크롭을 마친 파일(cropped.jpg)은 이미 최적 용량이므로 손실 없이 그대로 전송
-  if (file.name === "cropped.jpg") {
+  // 이미 크롭된 파일이면서 3.5MB 이하인 경우 그대로 전송 (Vercel 4.5MB 한도 완벽 준수)
+  if (file.name === "cropped.jpg" && file.size <= 3.5 * 1024 * 1024) {
     return file;
   }
 
-  // 크롭 없이 원본 전체를 올린 경우에만 고해상도로 리사이징
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.src = URL.createObjectURL(file);
@@ -67,9 +66,9 @@ async function compressImage(file: File): Promise<Blob> {
         return;
       }
 
-      // 수학 지수/기호 식별을 위해 최대 해상도를 2400px로 상향
-      const MAX_WIDTH = 2400;
-      const MAX_HEIGHT = 2400;
+      // Vercel 한도를 넘지 않으면서 지수/기호가 선명하게 유지되는 최적 해상도: 1800px
+      const MAX_WIDTH = 1800;
+      const MAX_HEIGHT = 1800;
       let width = img.width;
       let height = img.height;
 
@@ -88,19 +87,17 @@ async function compressImage(file: File): Promise<Blob> {
       canvas.width = width;
       canvas.height = height;
 
-      // 선명한 텍스트 렌더링 유지
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, width, height);
 
-      // JPEG 품질을 0.82 -> 0.92로 대폭 상향
       canvas.toBlob(
         (blob) => {
           if (blob) resolve(blob);
           else resolve(file);
         },
         "image/jpeg",
-        0.92
+        0.88
       );
     };
     img.onerror = () => reject(file);
