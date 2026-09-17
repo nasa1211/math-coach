@@ -1,9 +1,11 @@
+// app/page.tsx
 "use client";
 
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, useEffect, useRef, ChangeEvent } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
+import { shareOrDownloadElement } from "@/utils/exportImage"; // 추가
 
 interface ProblemItem {
   problem_number: string;
@@ -103,6 +105,11 @@ export default function MathCoachPage() {
   const [results, setResults] = useState<ProblemItem[] | null>(null);
   const [resultMode, setResultMode] = useState<"grade" | "guide">("grade");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
+
+  // 개별 카드 및 전체 컨테이너 ref 참조용
+  const reportContainerRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<(HTMLElement | null)[]>([]);
 
   const currentLoadingSteps =
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
@@ -191,6 +198,45 @@ export default function MathCoachPage() {
     if (confirm("로그아웃하고 화면을 잠그시겠습니까?")) {
       localStorage.removeItem("math_coach_auth");
       window.location.reload();
+    }
+  };
+
+  // 단일 문항 카드 공유/저장
+  const handleShareCard = async (index: number) => {
+    const cardEl = cardRefs.current[index];
+    if (!cardEl) return;
+
+    try {
+      setExportingIdx(index);
+      const prob = results?.[index];
+      const probNum = prob?.problem_number || `${index + 1}번`;
+      await shareOrDownloadElement(
+        cardEl,
+        `수학코치_${probNum}_리포트`,
+        `[수학 홈코치] ${probNum} 분석 리포트`
+      );
+    } catch (e) {
+      alert("이미지 저장/공유 중 오류가 발생했습니다.");
+    } finally {
+      setExportingIdx(null);
+    }
+  };
+
+  // 전체 리포트 묶음 공유/저장
+  const handleShareAll = async () => {
+    if (!reportContainerRef.current) return;
+
+    try {
+      setExportingIdx("all");
+      await shareOrDownloadElement(
+        reportContainerRef.current,
+        `수학코치_전체분석결과`,
+        `[수학 홈코치] 전체 문항 채점 & 코칭 리포트`
+      );
+    } catch (e) {
+      alert("전체 리포트 저장/공유 중 오류가 발생했습니다.");
+    } finally {
+      setExportingIdx(null);
     }
   };
 
@@ -407,38 +453,58 @@ export default function MathCoachPage() {
                 </div>
               </div>
             ) : results ? (
-              <div className="space-y-6">
+              <div className="space-y-6" ref={reportContainerRef}>
                 {/* 결과 헤더 */}
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>
-                      {resultMode === "guide"
-                        ? "📖 사전 지도 가이드"
-                        : "✏️ 채점 & 코칭 리포트"}
-                    </span>
-                    <span className="text-indigo-600 dark:text-indigo-400 text-sm font-normal">
-                      ({results.length}개 문항)
-                    </span>
-                  </h3>
-                  {resultMode === "grade" && (
-                    <div className="flex gap-2">
-                      <span className="text-xs bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 px-2.5 py-1 rounded-md font-semibold border border-green-200 dark:border-green-800/60">
-                        정답 {results.filter((p) => p.is_correct).length}
+                <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>
+                        {resultMode === "guide"
+                          ? "📖 사전 지도 가이드"
+                          : "✏️ 채점 & 코칭 리포트"}
                       </span>
-                      <span className="text-xs bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 px-2.5 py-1 rounded-md font-semibold border border-red-200 dark:border-red-800/60">
-                        오답 {results.filter((p) => !p.is_correct).length}
+                      <span className="text-indigo-600 dark:text-indigo-400 text-sm font-normal">
+                        ({results.length}개 문항)
                       </span>
-                    </div>
-                  )}
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {resultMode === "grade" && (
+                      <div className="flex gap-1.5">
+                        <span className="text-xs bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 px-2 py-1 rounded-md font-semibold border border-green-200 dark:border-green-800/60">
+                          정답 {results.filter((p) => p.is_correct).length}
+                        </span>
+                        <span className="text-xs bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 px-2 py-1 rounded-md font-semibold border border-red-200 dark:border-red-800/60">
+                          오답 {results.filter((p) => !p.is_correct).length}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* 전체 리포트 공유/저장 버튼 */}
+                    <button
+                      type="button"
+                      onClick={handleShareAll}
+                      disabled={exportingIdx !== null}
+                      className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold transition-all border border-indigo-200/80 dark:border-indigo-800/60 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      title="전체 리포트를 이미지로 카톡 공유 또는 저장"
+                    >
+                      <span>{exportingIdx === "all" ? "⏳" : "📤"}</span>
+                      <span>{exportingIdx === "all" ? "저장 중..." : "전체 공유"}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* 문항 목록 */}
                 {results.map((prob, idx) => (
                   <article
                     key={idx}
+                    ref={(el) => {
+                      cardRefs.current[idx] = el;
+                    }}
                     className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
-                    {/* 상단 문항 정보 */}
+                    {/* 상단 문항 정보 및 개별 공유 버튼 */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-base font-extrabold text-slate-900 dark:text-white">
@@ -448,17 +514,34 @@ export default function MathCoachPage() {
                           {prob.concept}
                         </span>
                       </div>
-                      {resultMode === "grade" && (
-                        <span
-                          className={`text-xs font-bold px-3 py-1 rounded-full ${
-                            prob.is_correct
-                              ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200/60 dark:border-green-800/40"
-                              : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40"
-                          }`}
+
+                      <div className="flex items-center gap-2">
+                        {resultMode === "grade" && (
+                          <span
+                            className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                              prob.is_correct
+                                ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200/60 dark:border-green-800/40"
+                                : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40"
+                            }`}
+                          >
+                            {prob.is_correct ? "정답" : "오답 코칭 필요"}
+                          </span>
+                        )}
+
+                        {/* 개별 문항 카드 공유/저장 버튼 */}
+                        <button
+                          type="button"
+                          onClick={() => handleShareCard(idx)}
+                          disabled={exportingIdx !== null}
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 border border-slate-200/60 dark:border-slate-700 cursor-pointer disabled:opacity-50"
+                          title="이 문제 결과만 카톡 공유 또는 이미지 저장"
                         >
-                          {prob.is_correct ? "정답" : "오답 코칭 필요"}
-                        </span>
-                      )}
+                          <span>{exportingIdx === idx ? "⏳" : "📤"}</span>
+                          <span className="hidden sm:inline">
+                            {exportingIdx === idx ? "저장 중..." : "공유/저장"}
+                          </span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* 문제 요약 */}
