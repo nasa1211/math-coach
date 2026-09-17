@@ -51,7 +51,7 @@ export default async function getCroppedImg(
         resolve({ blob, url: fileUrl });
       },
       "image/jpeg",
-      0.9
+      0.98
     );
   });
 }

@@ -48,7 +48,14 @@ const GUIDE_LOADING_STEPS = [
   "아이가 자주 빠지는 함정과 부모 지도 팁을 정리하고 있습니다...",
 ];
 
+// app/page.tsx 상단 compressImage 교체
 async function compressImage(file: File): Promise<Blob> {
+  // 사용자가 이미 크롭을 마친 파일(cropped.jpg)은 이미 최적 용량이므로 손실 없이 그대로 전송
+  if (file.name === "cropped.jpg") {
+    return file;
+  }
+
+  // 크롭 없이 원본 전체를 올린 경우에만 고해상도로 리사이징
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.src = URL.createObjectURL(file);
@@ -60,8 +67,9 @@ async function compressImage(file: File): Promise<Blob> {
         return;
       }
 
-      const MAX_WIDTH = 1400;
-      const MAX_HEIGHT = 1400;
+      // 수학 지수/기호 식별을 위해 최대 해상도를 2400px로 상향
+      const MAX_WIDTH = 2400;
+      const MAX_HEIGHT = 2400;
       let width = img.width;
       let height = img.height;
 
@@ -79,15 +87,20 @@ async function compressImage(file: File): Promise<Blob> {
 
       canvas.width = width;
       canvas.height = height;
+
+      // 선명한 텍스트 렌더링 유지
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, width, height);
 
+      // JPEG 품질을 0.82 -> 0.92로 대폭 상향
       canvas.toBlob(
         (blob) => {
           if (blob) resolve(blob);
           else resolve(file);
         },
         "image/jpeg",
-        0.82
+        0.92
       );
     };
     img.onerror = () => reject(file);
