@@ -3,6 +3,7 @@
 import { useState, useEffect, ChangeEvent } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import MathText from "@/components/MathText";
+import ImageCropperModal from "@/components/ImageCropperModal";
 
 interface ProblemItem {
   problem_number: string;
@@ -92,6 +93,8 @@ export default function MathCoachPage() {
   const [activeMode, setActiveMode] = useState<"grade" | "guide">("grade");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
+  const [isCropperOpen, setIsCropperOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [stepIdx, setStepIdx] = useState<number>(0);
   const [results, setResults] = useState<ProblemItem[] | null>(null);
@@ -115,11 +118,23 @@ export default function MathCoachPage() {
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
+      const objectUrl = URL.createObjectURL(selectedFile);
       setFile(selectedFile);
-      setPreview(URL.createObjectURL(selectedFile));
+      setRawImageSrc(objectUrl);
+      setPreview(objectUrl);
+      setIsCropperOpen(true); // 사진 선택 시 바로 크롭 모달 오픈
       setResults(null);
       setErrorMsg(null);
     }
+  };
+
+  const handleCropComplete = (croppedBlob: Blob, croppedUrl: string) => {
+    const croppedFile = new File([croppedBlob], "cropped.jpg", {
+      type: "image/jpeg",
+    });
+    setFile(croppedFile);
+    setPreview(croppedUrl);
+    setIsCropperOpen(false);
   };
 
   const handleAnalyze = async () => {
@@ -254,30 +269,48 @@ export default function MathCoachPage() {
                 </p>
               </div>
 
-              <label
-                htmlFor="camera-input"
-                className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 transition-all text-center group ${
-                  loading
-                    ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 cursor-not-allowed"
-                    : "border-indigo-200 dark:border-indigo-900/60 cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30 hover:border-indigo-400 dark:hover:border-indigo-600"
-                }`}
-              >
-                {preview ? (
-                  <div className="space-y-3 w-full">
+              {preview ? (
+                <div className="space-y-3">
+                  <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-2">
                     <img
                       src={preview}
                       alt="선택된 문제"
-                      className={`max-h-72 w-full object-contain rounded-lg shadow-sm transition-opacity ${
+                      className={`max-h-72 w-full object-contain rounded-lg transition-opacity ${
                         loading ? "opacity-50" : "opacity-100"
                       }`}
                     />
-                    {!loading && (
-                      <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold inline-block group-hover:underline">
-                        다른 사진으로 변경하기
-                      </span>
-                    )}
                   </div>
-                ) : (
+
+                  {!loading && (
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsCropperOpen(true)}
+                        className="flex-1 py-2 px-3 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-indigo-200/60 dark:border-indigo-800/60"
+                      >
+                        <span>✂️</span>
+                        <span>영역 다시 자르기</span>
+                      </button>
+
+                      <label
+                        htmlFor="camera-input"
+                        className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-700"
+                      >
+                        <span>🔄</span>
+                        <span>다른 사진 촬영</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <label
+                  htmlFor="camera-input"
+                  className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 transition-all text-center group ${
+                    loading
+                      ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 cursor-not-allowed"
+                      : "border-indigo-200 dark:border-indigo-900/60 cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30 hover:border-indigo-400 dark:hover:border-indigo-600"
+                  }`}
+                >
                   <div className="py-6">
                     <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center text-2xl mx-auto mb-3 group-hover:scale-105 transition-transform border border-indigo-100/50 dark:border-indigo-900/50">
                       📷
@@ -291,8 +324,8 @@ export default function MathCoachPage() {
                         : "문제 내용이 전체적으로 보이도록 촬영해 주세요"}
                     </p>
                   </div>
-                )}
-              </label>
+                </label>
+              )}
 
               <input
                 id="camera-input"
@@ -410,7 +443,7 @@ export default function MathCoachPage() {
                       )}
                     </div>
 
-                    {/* 문제 요약 (수식 렌더링 적용) */}
+                    {/* 문제 요약 */}
                     <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans font-medium">
                       <MathText content={prob.problem_text} />
                     </div>
@@ -565,6 +598,15 @@ export default function MathCoachPage() {
           </div>
         </div>
       </main>
+
+      {/* 이미지 자르기(Crop) 모달 */}
+      {isCropperOpen && rawImageSrc && (
+        <ImageCropperModal
+          imageSrc={rawImageSrc}
+          onCropComplete={handleCropComplete}
+          onCancel={() => setIsCropperOpen(false)}
+        />
+      )}
     </div>
   );
 }
