@@ -12,11 +12,9 @@ export default async function getCroppedImg(
     throw new Error("Canvas context를 생성할 수 없습니다.");
   }
 
-  // 화면에 렌더링된 이미지와 실제 원본 이미지 해상도의 비율 계산
   const scaleX = image.naturalWidth / image.width;
   const scaleY = image.naturalHeight / image.height;
 
-  // 잘라낼 실제 픽셀 크기
   const cropX = crop.x * scaleX;
   const cropY = crop.y * scaleY;
   const cropWidth = crop.width * scaleX;
@@ -25,7 +23,8 @@ export default async function getCroppedImg(
   canvas.width = Math.floor(cropWidth);
   canvas.height = Math.floor(cropHeight);
 
-  // 안티앨리어싱 및 이미지 품질 보정
+  // 미세한 연필선/기호 번짐 방지
+  ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
   ctx.drawImage(
@@ -51,7 +50,7 @@ export default async function getCroppedImg(
         resolve({ blob, url: fileUrl });
       },
       "image/jpeg",
-      0.9
+      0.92 // 0.92: 4.5MB 한도 내에서 텍스트 윤곽선이 뭉개지지 않는 최적 수치
     );
   });
 }

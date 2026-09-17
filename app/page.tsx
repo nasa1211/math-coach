@@ -48,13 +48,16 @@ const GUIDE_LOADING_STEPS = [
   "아이가 자주 빠지는 함정과 부모 지도 팁을 정리하고 있습니다...",
 ];
 
-// app/page.tsx 상단 compressImage 함수 교체
+// app/page.tsx
 async function compressImage(file: File): Promise<Blob> {
-  // 이미 크롭된 파일이면서 3.5MB 이하인 경우 그대로 전송 (Vercel 4.5MB 한도 완벽 준수)
-  if (file.name === "cropped.jpg" && file.size <= 3.5 * 1024 * 1024) {
+  const SAFE_LIMIT = 4.0 * 1024 * 1024; // 4.0MB (Vercel 4.5MB 한도 완벽 방어)
+
+  // 1. 크롭된 파일이면서 4MB 이하인 경우: 재압축 없이 원본 픽셀 그대로 전송
+  if (file.name === "cropped.jpg" && file.size <= SAFE_LIMIT) {
     return file;
   }
 
+  // 2. 크롭하지 않았거나 파일 크기가 4MB를 초과하는 경우만 정밀 보정
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.src = URL.createObjectURL(file);
@@ -66,9 +69,9 @@ async function compressImage(file: File): Promise<Blob> {
         return;
       }
 
-      // Vercel 한도를 넘지 않으면서 지수/기호가 선명하게 유지되는 최적 해상도: 1800px
-      const MAX_WIDTH = 1800;
-      const MAX_HEIGHT = 1800;
+      // 수학 OCR 최적 최대 해상도: 2048px (작은 지수와 쉼표/마침표를 완벽 식별)
+      const MAX_WIDTH = 2048;
+      const MAX_HEIGHT = 2048;
       let width = img.width;
       let height = img.height;
 
@@ -97,7 +100,7 @@ async function compressImage(file: File): Promise<Blob> {
           else resolve(file);
         },
         "image/jpeg",
-        0.88
+        0.9 // 고화질 유지
       );
     };
     img.onerror = () => reject(file);
