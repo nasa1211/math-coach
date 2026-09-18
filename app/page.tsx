@@ -131,8 +131,9 @@ export default function MathCoachPage() {
   // 최근 기록(히스토리) 상태
   const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
 
-  // 스크롤 감지 및 하단 탭 숨김 제어
+  // 하단 탭 표시 여부
   const [showBottomNav, setShowBottomNav] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(false);
   const lastScrollY = useRef(0);
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
@@ -165,11 +166,21 @@ export default function MathCoachPage() {
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
 
-  // 스크롤 이벤트 (PC 데스크톱 제외)
+  // 화면 크기 체크 (진짜 데스크톱 모니터 여부: 폭 768px 이상 & 높이 600px 이상)
+  useEffect(() => {
+    const checkDesktop = () => {
+      // Pro Max 가로(높이 430px)는 isDesktop이 false가 됨!
+      setIsDesktop(window.innerWidth >= 768 && window.innerHeight >= 600);
+    };
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
+
+  // 스크롤 이벤트 감지
   useEffect(() => {
     const handleScroll = () => {
-      // 진짜 PC 데스크톱인 경우: 폭 768px 이상이면서 세로 높이도 600px 이상일 때
-      const isDesktop = window.innerWidth >= 768 && window.innerHeight >= 600;
+      // 진짜 PC 데스크톱 화면이면 항상 노출
       if (isDesktop) {
         setShowBottomNav(true);
         return;
@@ -177,19 +188,18 @@ export default function MathCoachPage() {
 
       const currentScrollY = window.scrollY;
 
-      // 최상단 근처일 때는 항상 노출
+      // 최상단 근처일 때는 노출
       if (currentScrollY < 20) {
         setShowBottomNav(true);
         lastScrollY.current = currentScrollY;
         return;
       }
 
-      // 스크롤 방향 감지 (모바일 세로 및 모바일 가로 모두 동작)
       if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
         if (currentScrollY > lastScrollY.current) {
-          setShowBottomNav(false); // 아래로 스크롤 시 숨김
+          setShowBottomNav(false); // 프로맥스 가로에서도 아래로 내리면 숨김!
         } else {
-          setShowBottomNav(true);  // 위로 스크롤 시 표시
+          setShowBottomNav(true);
         }
         lastScrollY.current = currentScrollY;
       }
@@ -197,7 +207,7 @@ export default function MathCoachPage() {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isDesktop]);
 
   // 새 분석 결과 로컬 히스토리에 저장
   const saveToHistory = (mode: "grade" | "guide", problems: ProblemItem[]) => {
@@ -933,13 +943,13 @@ export default function MathCoachPage() {
         )}
       </main>
 
-      {/* 3. 모바일 하단 탭 바 */}
+      {/* 3. 모바일 하단 탭 바 (md:!translate-y-0 완전 제거) */}
       <nav
-        className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom md:!translate-y-0 ${
-          showBottomNav ? "translate-y-0" : "translate-y-full"
+        className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
+          isDesktop || showBottomNav ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 md:h-16 items-center px-4">
+      <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 md:h-16 items-center px-4">
           <button
             type="button"
             onClick={() => setActiveTab("camera")}
