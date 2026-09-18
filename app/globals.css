@@ -69,6 +69,11 @@ body {
     position: static !important;
     top: auto !important;
   }
+
+  /* 3. 아이폰 Pro Max 등 대화면 가로모드(width >= 768px)에서 md: 고정을 풀고 스크롤 숨김 정상 작동 */
+  nav.ios-safe-bottom {
+    transform: translateY(var(--tw-translate-y, 0)) !important;
+  }
 }
 
 /* 탭 전환 페이드인 애니메이션 */

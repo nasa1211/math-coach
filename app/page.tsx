@@ -168,23 +168,28 @@ export default function MathCoachPage() {
   // 스크롤 이벤트 (PC 데스크톱 제외)
   useEffect(() => {
     const handleScroll = () => {
-      if (window.innerWidth >= 768) {
+      // 진짜 PC 데스크톱인 경우: 폭 768px 이상이면서 세로 높이도 600px 이상일 때
+      const isDesktop = window.innerWidth >= 768 && window.innerHeight >= 600;
+      if (isDesktop) {
         setShowBottomNav(true);
         return;
       }
 
       const currentScrollY = window.scrollY;
+
+      // 최상단 근처일 때는 항상 노출
       if (currentScrollY < 20) {
         setShowBottomNav(true);
         lastScrollY.current = currentScrollY;
         return;
       }
 
+      // 스크롤 방향 감지 (모바일 세로 및 모바일 가로 모두 동작)
       if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
         if (currentScrollY > lastScrollY.current) {
-          setShowBottomNav(false);
+          setShowBottomNav(false); // 아래로 스크롤 시 숨김
         } else {
-          setShowBottomNav(true);
+          setShowBottomNav(true);  // 위로 스크롤 시 표시
         }
         lastScrollY.current = currentScrollY;
       }
