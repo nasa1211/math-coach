@@ -2,61 +2,38 @@
 "use client";
 
 import React from "react";
-import katex from "katex";
 import "katex/dist/katex.min.css";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 interface MathTextProps {
   content: string;
-  className?: string;
 }
 
-export default function MathText({ content, className = "" }: MathTextProps) {
+export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 정규식으로 $$...$$ (블록 수식) 및 $...$ (인라인 수식) 분리
-  const parts = content.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
+  // 1. $ 없이 날것으로 나온 LaTeX 명령어(\frac, \times, \left, \right 등)를 $...$로 자동 래핑
+  let processed = content
+    // 이미 $로 감싸진 부분은 건너뛰고, 독립된 \left( ... \right) 패턴 래핑
+    .replace(/(?<!\$)\\left\([^\$]+?\\right\)(?!\$)/g, (match) => `$${match}$`)
+    // 남아있는 단독 \frac{...}{...} 패턴 래핑
+    .replace(/(?<!\$)\\frac\{[^\}]+\}\{[^\}]+\}(?!\$)/g, (match) => `$${match}$`)
+    // 이스케이프 깨짐 방지 (\times 주변)
+    .replace(/(?<!\$)([+\-]?\\frac\{[^$]+\}(?:\s*\\times\s*[+\-]?\\frac\{[^$]+\})*)(?!\$)/g, (match) => {
+      if (match.includes("\\frac") && !match.startsWith("$")) return `$${match}$`;
+      return match;
+    });
 
   return (
-    <span className={className}>
-      {parts.map((part, index) => {
-        if (part.startsWith("$$") && part.endsWith("$$")) {
-          const math = part.slice(2, -2).trim();
-          try {
-            const html = katex.renderToString(math, {
-              displayMode: true,
-              throwOnError: false,
-            });
-            return (
-              <span
-                key={index}
-                className="block my-2 text-center"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch {
-            return <span key={index}>{part}</span>;
-          }
-        } else if (part.startsWith("$") && part.endsWith("$")) {
-          const math = part.slice(1, -1).trim();
-          try {
-            const html = katex.renderToString(math, {
-              displayMode: false,
-              throwOnError: false,
-            });
-            return (
-              <span
-                key={index}
-                className="inline-block align-baseline mx-0.5"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch {
-            return <span key={index}>{part}</span>;
-          }
-        }
-
-        return <span key={index}>{part}</span>;
-      })}
-    </span>
+    <div className="math-content leading-relaxed inline-block max-w-full overflow-x-auto align-middle">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+      >
+        {processed}
+      </ReactMarkdown>
+    </div>
   );
 }
