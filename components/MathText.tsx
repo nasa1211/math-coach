@@ -14,17 +14,41 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 1. $ 없이 날것으로 나온 LaTeX 명령어(\frac, \times, \left, \right 등)를 $...$로 자동 래핑
-  let processed = content
-    // 이미 $로 감싸진 부분은 건너뛰고, 독립된 \left( ... \right) 패턴 래핑
-    .replace(/(?<!\$)\\left\([^\$]+?\\right\)(?!\$)/g, (match) => `$${match}$`)
-    // 남아있는 단독 \frac{...}{...} 패턴 래핑
-    .replace(/(?<!\$)\\frac\{[^\}]+\}\{[^\}]+\}(?!\$)/g, (match) => `$${match}$`)
-    // 이스케이프 깨짐 방지 (\times 주변)
-    .replace(/(?<!\$)([+\-]?\\frac\{[^$]+\}(?:\s*\\times\s*[+\-]?\\frac\{[^$]+\})*)(?!\$)/g, (match) => {
-      if (match.includes("\\frac") && !match.startsWith("$")) return `$${match}$`;
+  // 1. 역슬래시 이스케이프가 풀려버린 경우 대비 (\frac -> \\frac 보정)
+  let text = content;
+
+  // 2. 이미 $...$ 로 감싸진 정상 수식은 임시 보존 (치환 방지)
+  const mathBlocks: string[] = [];
+  text = text.replace(/\$([^\$]+?)\$/g, (_, math) => {
+    mathBlocks.push(math);
+    return `__MATH_PLACEHOLDER_${mathBlocks.length - 1}__`;
+  });
+
+  // 3. $ 없이 날것으로 남은 수식 패턴 통째로 감싸기
+  // 원문자(①~⑩)나 숫자 뒤에 나오는 수식 라인 전체 감지
+  // 예: "② \left(-\frac{1}{28}\right) \times (-4) = +\frac{1}{7}"
+  text = text.replace(
+    /((?:[+\-]?\\(?:left\vert{}frac\vert{}times\vert{}div\vert{}pm\vert{}sqrt)[^$\n]+?(?:=[^$\n]+?)?))(?=[\s,\.\)\]]|$)/g,
+    (match) => {
+      // 불필요한 앞뒤 공백 정리 후 $ 로 감싸기
+      const trimmed = match.trim();
+      if (trimmed.length > 0) {
+        return `$${trimmed}$`;
+      }
       return match;
-    });
+    }
+  );
+
+  // 개별적으로 덩그러니 남은 \frac{...}{...} 등 보완
+  text = text.replace(
+    /(?<!\$)([\+\-]?\\(?:frac|left|right)[^\$\n]+?)(?!\$)(?=\s|$)/g,
+    (m) => `$${m.trim()}$`
+  );
+
+  // 4. 임시 보존해 둔 정상 $...$ 블록 복원
+  text = text.replace(/__MATH_PLACEHOLDER_(\d+)__/g, (_, idx) => {
+    return `$${mathBlocks[Number(idx)]}$`;
+  });
 
   return (
     <div className="math-content leading-relaxed inline-block max-w-full overflow-x-auto align-middle">
@@ -32,7 +56,7 @@ export default function MathText({ content }: MathTextProps) {
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
       >
-        {processed}
+        {text}
       </ReactMarkdown>
     </div>
   );
