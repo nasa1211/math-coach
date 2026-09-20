@@ -14,46 +14,45 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
+  // 1. 유령 제어문자(Form feed \x0c, Tab 등) 제거 및 백슬래시 탈락 복원
   let text = content
-    // 1. 유령 제어문자(Form feed \x0c, Tab 등) 제거
     .replace(/[\x00-\x09\x0b\x0c\x0e-\x1f]/g, "")
-    // 2. 백슬래시가 탈락한 LaTeX 명령어 원상복구 (오타 수정 완료)
+    // \frac 앞의 제어문자나 백슬래시 탈락 복원 (중괄호 보존)
+    .replace(/(^|[^\\])frac\{/g, "$1\\frac{")
+    .replace(/(^|[^\\])dfrac\{/g, "$1\\dfrac{")
     .replace(/(^|[^\\])times\b/g, "$1\\times ")
     .replace(/(^|[^\\])div\b/g, "$1\\div ")
-    .replace(/(^|[^\\])left\(/g, "$1\\left(")     .replace(/(^\vert{}[^\\])right\)/g, "$1\\right)")
-    // 3. 중괄호까지 깨진 frac 복구 (예: frac611 -> \frac{6}{11}, frac37 -> \frac{3}{7})
-    .replace(/(^|[^\\])frac([0-9])([0-9]+)/g, "$1\\frac{$2}{$3}")
-    .replace(/(^|[^\\])frac\{/g, "$1\\frac{");
+    .replace(/(^|[^\\])left\(/g, "$1\\left(")     .replace(/(^\vert{}[^\\])right\)/g, "$1\\right)");
 
-  // 4. 이미 $...$ 로 묶인 정상 수식 보호
+  // 2. 이미 존재하는 정상 $...$ 수식 임시 보호
   const preserved: string[] = [];
   text = text.replace(/\$([^$]+?)\$/g, (_, math) => {
     preserved.push(math);
-    return `__MATH_LOCK_${preserved.length - 1}__`;
+    return `__MATH_SAFE_${preserved.length - 1}__`;
   });
 
-  // 5. 연산식이 포함된 문장 통째로 감지하여 $...$ 자동 래핑
+  // 3. 문장 속에서 수식 명령어(\frac, \times 등)가 포함된 덩어리를 통째로 $...$ 로 래핑
+  // (분자 숫자를 깎아먹는 위험한 숫자 치환 정규식 완전 제거)
   const mathFormulaRegex =
     /((?:\([+\-]?[0-9a-zA-Z./\\]+\)|\\[a-zA-Z]+(?:\{[^{}]+\})*|[+\-]?[0-9a-zA-Z./]+)\s*(?:\\times|\\div|[+\-*=/]|<|>|<=|>=)\s*)+(?:\([+\-]?[0-9a-zA-Z./\\]+\)|\\[a-zA-Z]+(?:\{[^{}]+\})*|[+\-]?[0-9a-zA-Z./]+)/g;
 
   text = text.replace(mathFormulaRegex, (match) => {
-    if (match.includes("__MATH_LOCK_")) return match;
+    if (match.includes("__MATH_SAFE_")) return match;
     let expr = match.trim();
-    // 분수가 포함되어 있다면 \displaystyle을 붙여 상하 간격을 시원하게 확보
     if (expr.includes("\\frac") && !expr.includes("\\displaystyle")) {
       expr = `\\displaystyle ${expr}`;
     }
     return `$${expr}$`;
   });
 
-  // 6. 단독으로 남아있는 분수 (예: -\frac{6}{11}) $...$ 래핑
+  // 4. 단독으로 남아있는 분수 (예: -\frac{6}{11}) $...$ 래핑
   text = text.replace(
-    /(?<!\$)([+\-]?\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
+    /(?<!\$)([+\-]?\s*\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
     (m) => `$\\displaystyle ${m.trim()}$`
   );
 
-  // 7. 보호된 수식 복원
-  text = text.replace(/__MATH_LOCK_(\d+)__/g, (_, idx) => {
+  // 5. 보호했던 수식 복원
+  text = text.replace(/__MATH_SAFE_(\d+)__/g, (_, idx) => {
     let original = preserved[Number(idx)].trim();
     if (original.includes("\\frac") && !original.includes("\\displaystyle")) {
       original = `\\displaystyle ${original}`;
