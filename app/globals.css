@@ -58,19 +58,16 @@ body {
 
 /* 모바일 가로모드 (세로 높이가 500px 이하인 폰) 최적화 */
 @media screen and (orientation: landscape) and (max-height: 500px) {
-  /* 1. 헤더 sticky 해제 -> 스크롤 시작 즉시 위로 사라짐 */
   .mobile-landscape-header {
     position: static !important;
     top: auto !important;
   }
 
-  /* 2. 좌측 패널 sticky 해제 -> 화면 갇힘 현상 방지 */
   .mobile-landscape-sticky-reset {
     position: static !important;
     top: auto !important;
   }
 
-  /* 3. 아이폰 Pro Max 등 대화면 가로모드(width >= 768px)에서 md: 고정을 풀고 스크롤 숨김 정상 작동 */
   nav.ios-safe-bottom {
     transform: translateY(var(--tw-translate-y, 0)) !important;
   }
@@ -94,9 +91,9 @@ body {
 
 /* iOS Safe Area 대응 */
 .ios-safe-bottom {
-  padding-bottom: 20px; /* 기본 fallback */
-  padding-bottom: max(16px, constant(safe-area-inset-bottom)); /* 구형 iOS */
-  padding-bottom: max(16px, env(safe-area-inset-bottom));       /* 신형 iOS */
+  padding-bottom: 20px;
+  padding-bottom: max(16px, constant(safe-area-inset-bottom));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 .ios-safe-content-pb {
@@ -109,7 +106,6 @@ body {
    iOS 및 스탠드얼론 PWA 스크롤바 제어
 =================================================== */
 
-/* 기본 루트 잠금 해제 방지 유틸리티 */
 .no-scrollbar {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
@@ -122,7 +118,6 @@ body {
   height: 0 !important;
 }
 
-/* iOS 홈 화면(PWA) 또는 Standalone 모드에서만 스크롤 인디케이터 숨김 */
 html.is-pwa *,
 @media all and (display-mode: standalone) {
   * {
@@ -140,62 +135,34 @@ html.is-pwa *,
 }
 
 /* ===================================================
-   KaTeX 분수 수식 세로 겹침 및 글자 뭉개짐 완전 해결 (개선)
+   KaTeX 순정 렌더링 복원 (군더더기 CSS 제거)
 =================================================== */
 
-/* 1. Tailwind 리셋 무력화: KaTeX 내부 박스 모델 복원 */
-.katex,
-.katex * {
-  box-sizing: content-box !important;
-}
-
-/* 2. KaTeX 기본 폰트 및 줄높이 */
-.katex {
-  font-size: 1.12em !important;
-  text-indent: 0 !important;
-  white-space: nowrap;
-}
-
-/* 3. 분수(mfrac) 분자/분모 확실한 상하 간격 분리 */
-.katex .mfrac {
-  display: inline-block !important;
-  vertical-align: middle !important;
-  margin: 0 0.2em !important;
-}
-
-/* 분자(위쪽 숫자)를 위로 확실히 밀어올림 */
-.katex .mfrac .vlist-t .vlist-r:first-child .mord {
-  display: inline-block !important;
-  margin-bottom: 0.35em !important;
-  padding-bottom: 0.1em !important;
-}
-
-/* 분모(아래쪽 숫자)를 아래로 확실히 끌어내림 */
-.katex .mfrac .vlist-t .vlist-r:last-child .mord {
-  display: inline-block !important;
-  margin-top: 0.35em !important;
-  padding-top: 0.1em !important;
-}
-
-/* 분수 가로선(fraction line) 두께 및 전후 여백 확보 */
-.katex .frac-line {
-  border-bottom-width: 0.1em !important;
-  display: block !important;
-  margin: 0.2em 0 !important;
-}
-
-/* 4. 마이너스 기호(-), 괄호, 등호(=)와 분수선 중앙 일치 */
+/* 1. 수식 문장 줄높이를 넉넉히 주어 위아래 텍스트와 닿지 않게 함 */
 .math-content {
-  line-height: 2.3 !important;
+  line-height: 2.4 !important;
   display: inline-block;
   vertical-align: middle;
 }
 
+/* 2. Tailwind의 border-box 강제를 해제하여 KaTeX 자체 폰트 높이 계산 보호 */
+.katex,
+.katex * {
+  box-sizing: content-box !important;
+  border-color: currentColor;
+}
+
+/* 3. KaTeX 컨테이너 폰트 크기 및 baseline 설정 */
+.katex {
+  font-size: 1.15em !important;
+  text-indent: 0 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap;
+}
+
+/* 4. 가로 수식 정렬 시 글자 잘림 방지 */
 .katex-html {
-  display: inline-flex !important;
-  align-items: center !important;
-  vertical-align: middle !important;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 4px 1px;
+  display: inline-block !important;
+  vertical-align: -0.1em !important;
+  padding: 0 1px;
 }
