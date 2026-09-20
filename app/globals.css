@@ -4,14 +4,14 @@
 
 /* =========================================
    전체 폰트 크기 일괄 스케일업
-   기본 16px -> 17.5px (모바일 가독성 최적화)
+   기본 16px -> 18.5px (모바일 가독성 최적화)
    ========================================= */
 html {
-  font-size: 18.5px; /* 기본값(16px)보다 약 10% 확대 */
+  font-size: 18.5px;
   -webkit-text-size-adjust: 100%;
 }
 
-/* 태블릿/데스크톱(큰 화면)에서는 조금 더 시원하게 18px로 확장 */
+/* 태블릿/데스크톱(큰 화면)에서는 조금 더 시원하게 19px로 확장 */
 @media (min-width: 768px) {
   html {
     font-size: 19px;
@@ -96,7 +96,7 @@ body {
 .ios-safe-bottom {
   padding-bottom: 20px; /* 기본 fallback */
   padding-bottom: max(16px, constant(safe-area-inset-bottom)); /* 구형 iOS */
-  padding-bottom: max(16px, env(safe-area-inset-bottom));      /* 신형 iOS */
+  padding-bottom: max(16px, env(safe-area-inset-bottom));       /* 신형 iOS */
 }
 
 .ios-safe-content-pb {
@@ -106,29 +106,10 @@ body {
 }
 
 /* ===================================================
-   iOS 및 전체 브라우저 스크롤 인디케이터 완전 제거
+   iOS 및 스탠드얼론 PWA 스크롤바 제어
 =================================================== */
 
-/* 1. 기본 브라우저/루트 스크롤바 무력화 */
-html, body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden; /* iOS 루트 윈도우 스크롤바 차단 */
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
-}
-
-/* 2. WebKit 엔진 전체 가상 요소 숨김 */
-::-webkit-scrollbar,
-*::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
-  -webkit-appearance: none !important;
-}
-
-/* 3. 스크롤바 없는 스크롤 컨테이너 전용 유틸리티 */
+/* 기본 루트 잠금 해제 방지 유틸리티 */
 .no-scrollbar {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
@@ -141,10 +122,8 @@ html, body {
   height: 0 !important;
 }
 
-/* ===================================================
-   iOS 홈 화면 웹앱(PWA Standalone)에서만 스크롤바 숨김
-   (일반 사파리 브라우저나 데스크톱에서는 정상 노출)
-=================================================== */
+/* iOS 홈 화면(PWA) 또는 Standalone 모드에서만 스크롤 인디케이터 숨김 */
+html.is-pwa *,
 @media all and (display-mode: standalone) {
   * {
     scrollbar-color: transparent transparent !important;
@@ -155,24 +134,48 @@ html, body {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
+    background: transparent !important;
+    -webkit-appearance: none !important;
   }
 }
 
-/* app/globals.css 맨 아래 */
-
 /* ===================================================
-   iOS 홈 화면(PWA)으로 켰을 때만 스크롤 인디케이터 숨김
-   (일반 사파리 브라우저, 크롬, PC는 원래대로 스크롤바 유지)
+   KaTeX 분수 수식 세로 겹침 및 글자 뭉개짐 방지
 =================================================== */
-html.is-pwa * {
-  scrollbar-color: transparent transparent !important;
+
+/* 1. 수식 텍스트 블록 전체 줄간격 및 인라인 여백 확보 */
+.math-content {
+  line-height: 2 !important;
+  font-size: 1rem;
 }
 
-html.is-pwa ::-webkit-scrollbar,
-html.is-pwa *::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  background: transparent !important;
-  -webkit-appearance: none !important;
+/* 2. KaTeX 내부 렌더링 박스 줄높이 및 기준선 고정 */
+.katex {
+  font-size: 1.15em !important;
+  line-height: 1.2 !important;
+  text-indent: 0 !important;
+  white-space: nowrap;
+}
+
+/* 3. 분수(fraction) 분자, 분모, 분수선 수직 테이블 정렬 보정 */
+.katex .mfrac .vlist-t {
+  display: inline-table !important;
+  table-layout: fixed !important;
+}
+
+.katex .mfrac .vlist-r {
+  display: table-row !important;
+}
+
+.katex .mfrac .vlist {
+  display: table-cell !important;
+  vertical-align: bottom !important;
+}
+
+/* 4. 마이너스 기호(-), 곱셈 기호(×), 괄호가 분수선 중앙에 맞도록 보정 */
+.katex-html {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 3px 1px;
+  vertical-align: middle;
 }

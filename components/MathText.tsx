@@ -54,7 +54,7 @@ export default function MathText({ content }: MathTextProps) {
   });
 
   return (
-    <div className="math-content leading-relaxed inline-block max-w-full overflow-x-auto align-middle">
+    <div className="math-content inline-block max-w-full align-middle">
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
