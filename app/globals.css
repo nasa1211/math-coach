@@ -140,3 +140,20 @@ html, body {
   width: 0 !important;
   height: 0 !important;
 }
+
+/* ===================================================
+   iOS 홈 화면 웹앱(PWA Standalone)에서만 스크롤바 숨김
+   (일반 사파리 브라우저나 데스크톱에서는 정상 노출)
+=================================================== */
+@media all and (display-mode: standalone) {
+  * {
+    scrollbar-color: transparent transparent !important;
+  }
+
+  ::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+}
