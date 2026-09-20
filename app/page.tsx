@@ -177,6 +177,22 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
+  // iOS Standalone PWA 핀치 줌 강제 허용
+  useEffect(() => {
+    const handleGestureStart = (e: Event) => {
+      // iOS 기본 제스처 차단을 방지
+      e.stopPropagation();
+    };
+
+    document.addEventListener("gesturestart", handleGestureStart, { passive: true });
+    document.addEventListener("gesturechange", handleGestureStart, { passive: true });
+
+    return () => {
+      document.removeEventListener("gesturestart", handleGestureStart);
+      document.removeEventListener("gesturechange", handleGestureStart);
+    };
+  }, []);
+  
   // 스크롤 이벤트 감지
   useEffect(() => {
     const handleScroll = () => {
