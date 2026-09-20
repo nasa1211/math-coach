@@ -135,51 +135,31 @@ html.is-pwa *,
 }
 
 /* ===================================================
-   KaTeX 분수 수식 세로 겹침 완전 해결 (최종)
+   KaTeX 순정 복원 (내부 변형 CSS 제거)
 =================================================== */
 
-/* 1. 수식 문장 전체 줄높이 */
+/* 1. 수식을 품은 문장의 위아래 줄간격만 넉넉하게 확보 */
 .math-content {
-  line-height: 2.5 !important;
+  line-height: 2.2 !important;
   display: inline-block;
   vertical-align: middle;
 }
 
-/* 2. KaTeX 기본 폰트 크기 및 baseline 정렬 */
+/* 2. Tailwind의 border-box 및 폰트 강제만 해제 (순정 복원 핵심) */
 .katex {
-  font-size: 1.15em !important;
-  text-indent: 0 !important;
+  font-size: 1.15em;
+  text-indent: 0;
   white-space: nowrap;
 }
 
-/* 3. 분수(mfrac) 컨테이너 및 수평 축 맞춤 */
-.katex .mfrac {
-  display: inline-block !important;
-  vertical-align: -0.45em !important;
-  margin: 0 0.15em !important;
+.katex,
+.katex * {
+  box-sizing: content-box !important;
 }
 
-/* 4. 분자(위쪽)와 분수선 간격 확실히 확보 */
-.katex .mfrac .vlist-t .vlist-r:first-child {
-  padding-bottom: 0.28em !important;
-}
-
-/* 5. 분모(아래쪽)를 분수선 아래로 확실히 내림 (핵심 충돌 해결) */
-.katex .mfrac .vlist-t2 {
-  margin-top: 0.4em !important;
-}
-
-/* 6. 분수선(frac-line)은 border-box로 두께 고정 */
-.katex .frac-line {
-  box-sizing: border-box !important;
-  border-bottom-width: 0.08em !important;
-  border-bottom-style: solid !important;
-}
-
-/* 7. 인라인 KaTeX 렌더링 컨테이너 정렬 */
+/* 3. KaTeX HTML 컨테이너 정렬 보정 */
 .katex-html {
-  display: inline-flex !important;
-  align-items: center !important;
+  display: inline-block !important;
   vertical-align: middle !important;
-  padding: 2px 1px;
+  padding: 0 1px;
 }

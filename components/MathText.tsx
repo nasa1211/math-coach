@@ -33,7 +33,9 @@ export default function MathText({ content }: MathTextProps) {
       const formula = matchResult[2].trim();
 
       if (!formula.startsWith("$") && !formula.endsWith("$")) {
-        return `${prefix}$${formula}$`;
+        // \frac이 포함되어 있다면 \displaystyle을 추가하여 정석 큰 분수로 렌더링
+        const mathExpr = formula.includes("\\frac") ? `$\\displaystyle ${formula}$` : `$${formula}$`;
+        return `${prefix}${mathExpr}`;
       }
     }
 
