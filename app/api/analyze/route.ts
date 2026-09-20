@@ -14,7 +14,6 @@ const CANDIDATE_MODELS = [
 ];
 
 
-// LaTeX 수식 역슬래시(\)로 인한 JSON 제어문자 변환 방어 함수
 function safeJsonParse(rawText: string) {
   let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
@@ -24,12 +23,21 @@ function safeJsonParse(rawText: string) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
+  // \f(폼피드 제어문자 \x0c)와 \t(탭)를 정상 LaTeX 텍스트로 보정
+  cleanText = cleanText
+    .replace(/[\x0c\f]frac/g, "\\\\frac")
+    .replace(/[\t]times/g, "\\\\times");
+
   try {
     return JSON.parse(cleanText);
   } catch {
-    // 실패 시 단일 역슬래시만 일괄 이스케이프 후 파싱
-    const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
-    return JSON.parse(fixedText);
+    try {
+      // 일반 단일 역슬래시 보정
+      const fixed = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
+      return JSON.parse(fixed);
+    } catch (e) {
+      throw e;
+    }
   }
 }
 

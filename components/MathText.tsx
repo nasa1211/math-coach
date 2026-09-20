@@ -14,25 +14,22 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 1. 유령 제어문자(Form feed \x0c, Tab 등) 제거 및 백슬래시 탈락 복원
+  // 1. 유령 제어문자 및 역슬래시 탈락 복구 (중괄호와 숫자 절대 보존)
   let text = content
     .replace(/[\x00-\x09\x0b\x0c\x0e-\x1f]/g, "")
-    // \frac 앞의 제어문자나 백슬래시 탈락 복원 (중괄호 보존)
-    .replace(/(^|[^\\])frac\{/g, "$1\\frac{")
-    .replace(/(^|[^\\])dfrac\{/g, "$1\\dfrac{")
     .replace(/(^|[^\\])times\b/g, "$1\\times ")
     .replace(/(^|[^\\])div\b/g, "$1\\div ")
-    .replace(/(^|[^\\])left\(/g, "$1\\left(")     .replace(/(^\vert{}[^\\])right\)/g, "$1\\right)");
+    .replace(/(^|[^\\])left\(/g, "$1\\left(")     .replace(/(^\vert{}[^\\])right\)/g, "$1\\right)")
+    .replace(/(^|[^\\])frac\{/g, "$1\\frac{");
 
-  // 2. 이미 존재하는 정상 $...$ 수식 임시 보호
+  // 2. 이미 $...$ 로 감싸진 정상 수식 보호
   const preserved: string[] = [];
   text = text.replace(/\$([^$]+?)\$/g, (_, math) => {
     preserved.push(math);
     return `__MATH_SAFE_${preserved.length - 1}__`;
   });
 
-  // 3. 문장 속에서 수식 명령어(\frac, \times 등)가 포함된 덩어리를 통째로 $...$ 로 래핑
-  // (분자 숫자를 깎아먹는 위험한 숫자 치환 정규식 완전 제거)
+  // 3. 복합 연산식 통째로 감지하여 $...$ 래핑
   const mathFormulaRegex =
     /((?:\([+\-]?[0-9a-zA-Z./\\]+\)|\\[a-zA-Z]+(?:\{[^{}]+\})*|[+\-]?[0-9a-zA-Z./]+)\s*(?:\\times|\\div|[+\-*=/]|<|>|<=|>=)\s*)+(?:\([+\-]?[0-9a-zA-Z./\\]+\)|\\[a-zA-Z]+(?:\{[^{}]+\})*|[+\-]?[0-9a-zA-Z./]+)/g;
 
@@ -45,13 +42,13 @@ export default function MathText({ content }: MathTextProps) {
     return `$${expr}$`;
   });
 
-  // 4. 단독으로 남아있는 분수 (예: -\frac{6}{11}) $...$ 래핑
+  // 4. 개별 분수 래핑
   text = text.replace(
     /(?<!\$)([+\-]?\s*\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
     (m) => `$\\displaystyle ${m.trim()}$`
   );
 
-  // 5. 보호했던 수식 복원
+  // 5. 보호한 수식 복원
   text = text.replace(/__MATH_SAFE_(\d+)__/g, (_, idx) => {
     let original = preserved[Number(idx)].trim();
     if (original.includes("\\frac") && !original.includes("\\displaystyle")) {
