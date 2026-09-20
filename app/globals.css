@@ -135,49 +135,42 @@ html.is-pwa *,
 }
 
 /* ===================================================
-   KaTeX 분수선 관통/겹침 문제 정석 복원
+   KaTeX 분수 수직 정렬 순정 복원 (최종)
 =================================================== */
 
-/* 1. KaTeX 내부 모든 요소의 box-sizing을 브라우저 기본(content-box)으로 복원 */
+/* 1. Tailwind 리셋 무력화: KaTeX 박스 모델을 순정 content-box로 복원 */
 .katex,
 .katex * {
   box-sizing: content-box !important;
 }
 
-/* 2. KaTeX 가상 지지대(pstrut) 높이 및 위치 복원 (핵심) */
+/* 2. vlist 내부 요소들의 baseline 및 relative 위치 계산 보장 */
+.katex .vlist {
+  display: inline-block !important;
+  position: relative !important;
+}
+
+.katex .vlist > span {
+  display: block !important;
+  position: relative !important;
+}
+
+/* 3. pstrut(가상 기둥) 지지대 보존 */
 .katex .pstrut {
   display: inline-block !important;
   overflow: hidden !important;
   width: 0 !important;
 }
 
-/* 3. KaTeX 수직 목록 컨테이너 정렬 및 높이 유지 */
-.katex .vlist-t {
-  display: inline-table !important;
-  table-layout: fixed !important;
-  border-collapse: collapse !important;
+/* 4. 마이너스 기호 및 괄호와 분수 수평 축 정렬 */
+.katex-html {
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
 }
 
-.katex .vlist-r {
-  display: table-row !important;
-}
-
-.katex .vlist {
-  display: table-cell !important;
-  vertical-align: bottom !important;
-  position: relative !important;
-}
-
-/* 4. 분수선 순정 두께 및 렌더링 유지 */
-.katex .frac-line {
-  display: block !important;
-  box-sizing: content-box !important;
-  border-bottom-style: solid !important;
-}
-
-/* 5. 문장 내 수식 줄높이 넉넉히 확보 */
 .math-content {
-  line-height: 2.2 !important;
+  line-height: 2.3 !important;
   display: inline-block;
   vertical-align: middle;
 }
