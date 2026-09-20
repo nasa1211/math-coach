@@ -14,56 +14,43 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 1. JSON 이스케이프로 인해 깨진 제어문자(\x0c=FormFeed, \t=Tab) 원천 복구
-  let text = content
-    // \f가 공백문자(\x0c)로 바뀐 채 뒤에 frac이 붙은 것 복구: \frac -> \frac
-    .replace(/[\x0c\f]\s*\\?frac/g, "\\frac")
-    // \f가 날아가서 rac만 남은 것 복구: rac{ -> \frac{
-    .replace(/(^|[^a-zA-Z\\])rac\{/g, "$1\\frac{")
-    // \t가 탭 문자로 바뀐 것 복구: imes -> \times
-    .replace(/[\t]\s*\\?times/g, "\\times")
-    .replace(/(^|[^a-zA-Z\\])imes\b/g, "$1\\times");
+  // 1. 유령 제어문자(Form Feed \x0c, \f 등) 및 오염된 문자열 1차 청소
+  let cleaned = content
+    .replace(/[\x00-\x09\x0b\x0c\x0e-\x1f]/g, "") // 보이지 않는 숨은 제어문자 일괄 제거
+    .replace(/rac\{/g, "\\frac{")
+    .replace(/(^|[^\\])times\b/g, "$1\\times ")
+    .replace(/(^|[^\\])div\b/g, "$1\\div ");
 
-  // 2. 이미 $...$ 로 감싸진 수식 임시 보호
+  // 2. 이미 $...$ 로 묶여있는 수식 보호
   const preserved: string[] = [];
-  let sanitized = text.replace(/\$([^$]+?)\$/g, (_, math) => {
+  cleaned = cleaned.replace(/\$([^$]+?)\$/g, (_, math) => {
     preserved.push(math);
-    return `__PRESERVED_${preserved.length - 1}__`;
+    return `__MATH_${preserved.length - 1}__`;
   });
 
-  // 3. 문장 줄 단위로 수식(\frac, \times, ^, _, \left 등) 자동 래핑 및 \displaystyle 적용
-  const lines = sanitized.split("\n").map((line) => {
-    const hasLatex = /\\(frac|times|div|sqrt|left|right|pm)/.test(line);
-    if (!hasLatex) return line;
+  // 3. 문장 속에서 괄호/숫자/수식이 결합된 식 전체를 감지해 $...$ 로 래핑
+  // 예: (-0.2) \times (- \frac{6}{11}) \times (-5)
+  // 예: \displaystyle (-0.2) \times ...
+  // 예: -\frac{6}{11}
+  const mathFormulaRegex =
+    /(?:\\displaystyle\s*)?(?:[+\-]?\s*(?:\([^\)\n]+\)|[0-9a-zA-Z\.]+|\\frac\{[^{}]+\}\{[^{}]+\})\s*(?:\\times|\\div|[+\-*=/]|<|>|<=|>=|!=|=)\s*)+(?:\([^\)\n]+\)|[0-9a-zA-Z\.]+|\\frac\{[^{}]+\}\{[^{}]+\})/g;
 
-    // 리스트 기호/원문자(• ①, 1.) 분리
-    const match = line.match(/^([\s\t*•\-\d().①-⑩]*\s*)([\s\S]+)$/);
-    if (match && match[2]) {
-      const prefix = match[1] || "";
-      let formula = match[2].trim();
-
-      if (!formula.startsWith("$") && !formula.endsWith("$")) {
-        // \frac이 있으면 분자가 분모와 겹치지 않도록 \displaystyle 부여
-        if (formula.includes("\\frac") && !formula.includes("\\displaystyle")) {
-          formula = `\\displaystyle ${formula}`;
-        }
-        return `${prefix}$${formula}$`;
-      }
-    }
-    return line;
+  cleaned = cleaned.replace(mathFormulaRegex, (match) => {
+    // 이미 래핑된 플레이스홀더가 포함되어 있다면 스킵
+    if (match.includes("__MATH_")) return match;
+    const cleanExpr = match.replace(/\\displaystyle\s*/g, "").trim();
+    return `$\\displaystyle ${cleanExpr}$`;
   });
 
-  let processed = lines.join("\n");
-
-  // 4. 문장 중간에 섞여 있는 잔여 \frac 인라인 수식 처리
-  processed = processed.replace(
-    /(?<!\$)([+\-]?\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
-    (m) => `$\\displaystyle ${m.trim()}$`
+  // 4. 단독으로 남아있는 분수 및 음수 분수 (예: -\frac{6}{11}, \frac{1}{5}) 래핑
+  cleaned = cleaned.replace(
+    /(?<!\$)(?:\\displaystyle\s*)?([+\-]?\s*\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
+    (_, frac) => `$\\displaystyle ${frac.trim()}$`
   );
 
-  // 5. 보호했던 수식 복원
-  processed = processed.replace(/__PRESERVED_(\d+)__/g, (_, idx) => {
-    let original = preserved[Number(idx)];
+  // 5. 보호했던 수식 복원 (분수가 들어있으면 \displaystyle 적용하여 겹침 방지)
+  cleaned = cleaned.replace(/__MATH_(\d+)__/g, (_, idx) => {
+    let original = preserved[Number(idx)].trim();
     if (original.includes("\\frac") && !original.includes("\\displaystyle")) {
       original = `\\displaystyle ${original}`;
     }
@@ -76,7 +63,7 @@ export default function MathText({ content }: MathTextProps) {
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
       >
-        {processed}
+        {cleaned}
       </ReactMarkdown>
     </div>
   );
