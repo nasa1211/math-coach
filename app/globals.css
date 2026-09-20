@@ -157,3 +157,22 @@ html, body {
     height: 0 !important;
   }
 }
+
+/* app/globals.css 맨 아래 */
+
+/* ===================================================
+   iOS 홈 화면(PWA)으로 켰을 때만 스크롤 인디케이터 숨김
+   (일반 사파리 브라우저, 크롬, PC는 원래대로 스크롤바 유지)
+=================================================== */
+html.is-pwa * {
+  scrollbar-color: transparent transparent !important;
+}
+
+html.is-pwa ::-webkit-scrollbar,
+html.is-pwa *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+}

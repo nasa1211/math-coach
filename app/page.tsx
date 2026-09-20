@@ -143,6 +143,17 @@ export default function MathCoachPage() {
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
   const containerRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    // iOS 홈 화면(PWA/Standalone) 여부 정확한 판별
+    const isIosStandalone =
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true ||
+      window.matchMedia("(display-mode: standalone)").matches;
+
+    if (isIosStandalone) {
+      document.documentElement.classList.add("is-pwa");
+    }
+  }, []);
+
   // 로컬 스토리지에서 기록 불러오기
   useEffect(() => {
     try {
