@@ -140,48 +140,53 @@ html.is-pwa *,
 }
 
 /* ===================================================
-   KaTeX 분수 수식 세로 겹침 및 글자 뭉개짐 완전 해결
+   KaTeX 분수 수식 세로 겹침 및 글자 뭉개짐 완전 해결 (개선)
 =================================================== */
 
-/* 1. Tailwind 리셋 무력화: KaTeX 박스 모델을 기본 content-box로 복원 */
+/* 1. Tailwind 리셋 무력화: KaTeX 내부 박스 모델 복원 */
 .katex,
 .katex * {
   box-sizing: content-box !important;
 }
 
-/* 2. KaTeX 기본 폰트 크기 및 줄높이 정돈 */
+/* 2. KaTeX 기본 폰트 및 줄높이 */
 .katex {
-  font-size: 1.1em !important;
+  font-size: 1.12em !important;
   text-indent: 0 !important;
   white-space: nowrap;
 }
 
-/* 3. 분수(mfrac) 분자, 분모, 분수선 사이의 수직 간격 강제 확보 */
+/* 3. 분수(mfrac) 분자/분모 확실한 상하 간격 분리 */
 .katex .mfrac {
   display: inline-block !important;
   vertical-align: middle !important;
-  margin: 0 0.15em !important;
+  margin: 0 0.2em !important;
 }
 
-/* 분자(numerator) 위쪽 여백 확보 */
-.katex .mfrac > .vlist-t > .vlist-r:first-child {
-  padding-bottom: 0.18em !important;
+/* 분자(위쪽 숫자)를 위로 확실히 밀어올림 */
+.katex .mfrac .vlist-t .vlist-r:first-child .mord {
+  display: inline-block !important;
+  margin-bottom: 0.35em !important;
+  padding-bottom: 0.1em !important;
 }
 
-/* 분모(denominator) 아래쪽 여백 확보 */
-.katex .mfrac > .vlist-t > .vlist-r:last-child {
-  padding-top: 0.18em !important;
+/* 분모(아래쪽 숫자)를 아래로 확실히 끌어내림 */
+.katex .mfrac .vlist-t .vlist-r:last-child .mord {
+  display: inline-block !important;
+  margin-top: 0.35em !important;
+  padding-top: 0.1em !important;
 }
 
-/* 분수선 두께 및 여백 보정 */
+/* 분수 가로선(fraction line) 두께 및 전후 여백 확보 */
 .katex .frac-line {
-  border-bottom-width: 0.08em !important;
-  margin: 0.12em 0 !important;
+  border-bottom-width: 0.1em !important;
+  display: block !important;
+  margin: 0.2em 0 !important;
 }
 
-/* 4. 마이너스(-), 괄호, 곱셈 기호와 분수의 수직 중앙 정렬 */
+/* 4. 마이너스 기호(-), 괄호, 등호(=)와 분수선 중앙 일치 */
 .math-content {
-  line-height: 2.2 !important;
+  line-height: 2.3 !important;
   display: inline-block;
   vertical-align: middle;
 }
@@ -192,5 +197,5 @@ html.is-pwa *,
   vertical-align: middle !important;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 3px 1px;
+  padding: 4px 1px;
 }
