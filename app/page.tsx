@@ -141,6 +141,7 @@ export default function MathCoachPage() {
 
   const currentLoadingSteps =
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // 로컬 스토리지에서 기록 불러오기
   useEffect(() => {
@@ -179,16 +180,14 @@ export default function MathCoachPage() {
 
   // 스크롤 이벤트 감지
   useEffect(() => {
-    const handleScroll = () => {
-      // 진짜 PC 데스크톱 화면이면 항상 노출
+    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
       if (isDesktop) {
         setShowBottomNav(true);
         return;
       }
 
-      const currentScrollY = window.scrollY;
+      const currentScrollY = e.currentTarget.scrollTop;
 
-      // 최상단 근처일 때는 노출
       if (currentScrollY < 20) {
         setShowBottomNav(true);
         lastScrollY.current = currentScrollY;
@@ -197,7 +196,7 @@ export default function MathCoachPage() {
 
       if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
         if (currentScrollY > lastScrollY.current) {
-          setShowBottomNav(false); // 프로맥스 가로에서도 아래로 내리면 숨김!
+          setShowBottomNav(false);
         } else {
           setShowBottomNav(true);
         }
@@ -387,7 +386,13 @@ export default function MathCoachPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb">
+    //<div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb">
+    // 최상위 컨테이너: h-dvh (또는 h-screen) + overflow-y-auto + no-scrollbar
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="h-screen h-[100dvh] overflow-y-auto no-scrollbar bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb"
+    >
       {/* 1. 상단 네비게이션 헤더 */}
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors mobile-landscape-header">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
