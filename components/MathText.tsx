@@ -14,9 +14,9 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 1. 이미 올바르게 $...$로 감싸진 수식을 보호
+  // 1. 이미 올바르게 $...$로 감싸진 수식을 임시 플레이스홀더로 보호
   const preservedMath: string[] = [];
-  let sanitized = content.replace(/\$([^\$]+?)\$/g, (_, math) => {
+  const sanitized = content.replace(/\$([^\$]+?)\$/g, (_, math) => {
     preservedMath.push(math);
     return `__PRESERVED_MATH_${preservedMath.length - 1}__`;
   });
@@ -24,7 +24,7 @@ export default function MathText({ content }: MathTextProps) {
   // 2. 줄(Line) 단위로 쪼개어 수식 명령어 감지 및 자동 래핑
   const lines = sanitized.split("\n").map((line) => {
     // 해당 줄에 LaTeX 수식 기호가 있는지 확인
-    const hasLatex = /\\(frac\vert{}left\vert{}right\vert{}times\vert{}div\vert{}pm\vert{}sqrt)/.test(line);     if (!hasLatex) return line;      // "• ② \left(-\frac{1}{28}\right)..." 또는 "② \left..." 형태 감지     // 앞쪽의 리스트 기호나 원문자(①~⑩, (1)~(10), 1.)를 캡처하고 수식 부분만 분리     const prefixMatch = line.match(/^([\s\t*•\-\d\(\)①-⑩\.]*\s*)([\s\S]+)$/);
+    const hasLatex = /\\(frac\vert{}left\vert{}right\vert{}times\vert{}div\vert{}pm\vert{}sqrt)/.test(line);     if (!hasLatex) return line;      // 앞쪽의 리스트 기호나 원문자(①~⑩, (1)~(10), 1.)를 캡처하고 수식 부분 분리     const prefixMatch = line.match(/^([\s\t*•\-\d\(\)①-⑩\.]*\s*)([\s\S]+)$/);
     if (prefixMatch) {
       const prefix = prefixMatch[1];
       const formula = prefixMatch[2].trim();
@@ -40,9 +40,9 @@ export default function MathText({ content }: MathTextProps) {
 
   let processed = lines.join("\n");
 
-  // 3. 인라인 문장 중간에 섞여있는 잔여 \frac{...}{...} 등 개별 수식 보정보완
+  // 3. 인라인 문장 중간에 섞여있는 잔여 \frac{...}{...} 등 개별 수식 보정
   processed = processed.replace(
-    /(?<!\$)([+\-]?\\(?:frac\vert{}left\vert{}right)[^\$\n]+?)(?!\$)(?=\s\vert{}[,\.\)\]]|$)/g,
+    /(?<!\$)([+\-]?\\(?:frac\vert{}left\vert{}right)[^\$\n]+?)(?!\$)(?=\s\vert{}[,.\)\]]|$)/g,
     (m) => `$${m.trim()}$`
   );
 

@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import { useState, useEffect, useRef, ChangeEvent } from "react";
+import { useState, useEffect, useRef, ChangeEvent, UIEvent } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
@@ -138,10 +138,10 @@ export default function MathCoachPage() {
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const currentLoadingSteps =
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // iOS 홈 화면(PWA/Standalone) 여부 정확한 판별
@@ -178,10 +178,9 @@ export default function MathCoachPage() {
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
 
-  // 화면 크기 체크 (진짜 데스크톱 모니터 여부: 폭 768px 이상 & 높이 600px 이상)
+  // 화면 크기 체크
   useEffect(() => {
     const checkDesktop = () => {
-      // Pro Max 가로(높이 430px)는 isDesktop이 false가 됨!
       setIsDesktop(window.innerWidth >= 768 && window.innerHeight >= 600);
     };
     checkDesktop();
@@ -189,35 +188,30 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
-  // 스크롤 이벤트 감지
-  useEffect(() => {
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-      if (isDesktop) {
+  // 최상위 스크롤 컨테이너 전용 핸들러 (타입 안전)
+  const handleScroll = (e: UIEvent<HTMLDivElement>) => {
+    if (isDesktop) {
+      setShowBottomNav(true);
+      return;
+    }
+
+    const currentScrollY = e.currentTarget.scrollTop;
+
+    if (currentScrollY < 20) {
+      setShowBottomNav(true);
+      lastScrollY.current = currentScrollY;
+      return;
+    }
+
+    if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
+      if (currentScrollY > lastScrollY.current) {
+        setShowBottomNav(false);
+      } else {
         setShowBottomNav(true);
-        return;
       }
-
-      const currentScrollY = e.currentTarget.scrollTop;
-
-      if (currentScrollY < 20) {
-        setShowBottomNav(true);
-        lastScrollY.current = currentScrollY;
-        return;
-      }
-
-      if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
-        if (currentScrollY > lastScrollY.current) {
-          setShowBottomNav(false);
-        } else {
-          setShowBottomNav(true);
-        }
-        lastScrollY.current = currentScrollY;
-      }
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [isDesktop]);
+      lastScrollY.current = currentScrollY;
+    }
+  };
 
   // 새 분석 결과 로컬 히스토리에 저장
   const saveToHistory = (mode: "grade" | "guide", problems: ProblemItem[]) => {
@@ -239,7 +233,7 @@ export default function MathCoachPage() {
     };
 
     setHistoryList((prev) => {
-      const updated = [newRecord, ...prev].slice(0, 30); // 최근 30개 유지
+      const updated = [newRecord, ...prev].slice(0, 30);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       } catch (e) {
@@ -254,7 +248,9 @@ export default function MathCoachPage() {
     setResults(item.problems);
     setResultMode(item.mode);
     setActiveTab("result");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (containerRef.current) {
+      containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   // 특정 히스토리 삭제
@@ -397,8 +393,6 @@ export default function MathCoachPage() {
   };
 
   return (
-    //<div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb">
-    // 최상위 컨테이너: h-dvh (또는 h-screen) + overflow-y-auto + no-scrollbar
     <div
       ref={containerRef}
       onScroll={handleScroll}
@@ -659,7 +653,6 @@ export default function MathCoachPage() {
                     }}
                     className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
-                    {/* 가로 찌그러짐을 수정한 2행 구조 헤더 */}
                     <div className="space-y-2.5 pb-1 border-b border-slate-100 dark:border-slate-800/60">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -931,7 +924,6 @@ export default function MathCoachPage() {
                         </p>
                       </div>
 
-                      {/* 삭제 버튼 */}
                       <button
                         type="button"
                         onClick={(e) => handleDeleteHistoryItem(e, item.id)}
@@ -959,13 +951,13 @@ export default function MathCoachPage() {
         )}
       </main>
 
-      {/* 3. 모바일 하단 탭 바 (md:!translate-y-0 완전 제거) */}
+      {/* 3. 모바일 하단 탭 바 */}
       <nav
         className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
           isDesktop || showBottomNav ? "translate-y-0" : "translate-y-full"
         }`}
       >
-      <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 md:h-16 items-center px-4">
+        <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 md:h-16 items-center px-4">
           <button
             type="button"
             onClick={() => setActiveTab("camera")}
