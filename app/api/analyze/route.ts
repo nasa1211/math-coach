@@ -4,12 +4,15 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // 시도할 모델 우선순위 목록 (트래픽 과부하 시 순차적으로 자동 전환)
 const CANDIDATE_MODELS = [
+  "gemini-3.6-flash",
+  "gemini-3.1-flash-lite-preview",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-2.5-pro",
   "gemini-1.5-flash",
   "gemini-1.5-pro",
 ];
+
 
 // LaTeX 수식 역슬래시(\)로 인한 JSON 제어문자 변환 방어 함수
 function safeJsonParse(rawText: string) {
