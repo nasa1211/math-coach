@@ -11,9 +11,9 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
-  viewportFit: 'cover',
+  maximumScale: 5,        // 최대 5배까지 확대 허용
+  userScalable: true,     // 핀치 줌 제스처 허용
+  viewportFit: 'cover',   // Safe Area 인식 유지
 };
 
 export const metadata: Metadata = {

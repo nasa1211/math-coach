@@ -10,11 +10,7 @@ html {
   font-size: 18.5px; /* 기본값(16px)보다 약 10% 확대 */
   -webkit-text-size-adjust: 100%;
 }
-/* iOS PWA Standalone 환경에서 핀치 줌 허용 */
-html, body {
-  touch-action: pan-x pan-y pinch-zoom !important;
-  -webkit-text-size-adjust: 100%;
-}
+
 /* 태블릿/데스크톱(큰 화면)에서는 조금 더 시원하게 18px로 확장 */
 @media (min-width: 768px) {
   html {
