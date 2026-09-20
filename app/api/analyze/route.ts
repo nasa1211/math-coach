@@ -16,34 +16,20 @@ const CANDIDATE_MODELS = [
 
 // LaTeX 수식 역슬래시(\)로 인한 JSON 제어문자 변환 방어 함수
 function safeJsonParse(rawText: string) {
-  // 1. 마크다운 코드블록 제거
   let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
-  // 2. 가장 바깥쪽 { ... } 추출
   const firstBrace = cleanText.indexOf("{");
   const lastBrace = cleanText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  // 3. [핵심] JSON.parse 실행 전 \f, \t 변환 방지:
-  // LaTeX 전용 명령어(\frac, \times, \left 등) 앞의 단일 역슬래시를 이중 역슬래시(\\)로 선제 치환
-  cleanText = cleanText.replace(
-    /\\(frac|dfrac|times|div|sqrt|left|right|pm|cdot|displaystyle)([^\w]|$)/g,
-    "\\\\$1$2"
-  );
-
-  // 4. 안전 파싱 시도
   try {
     return JSON.parse(cleanText);
-  } catch (initialError) {
-    // 잔여 역슬래시가 있을 경우 일반 알파벳 이스케이프 전체를 보정 후 재시도
-    try {
-      const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
-      return JSON.parse(fixedText);
-    } catch {
-      throw initialError;
-    }
+  } catch {
+    // 실패 시 단일 역슬래시만 일괄 이스케이프 후 파싱
+    const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
+    return JSON.parse(fixedText);
   }
 }
 
