@@ -4,8 +4,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // 시도할 모델 우선순위 목록 (트래픽 과부하 시 순차적으로 자동 전환)
 const CANDIDATE_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-3.1-flash-lite-preview",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-2.5-pro",
@@ -13,7 +11,7 @@ const CANDIDATE_MODELS = [
   "gemini-1.5-pro",
 ];
 
-// LaTeX 수식 역슬래시(\)로 인한 JSON 파싱 에러 방어 함수
+// LaTeX 수식 역슬래시(\)로 인한 JSON 제어문자 변환 방어 함수
 function safeJsonParse(rawText: string) {
   // 1. 마크다운 코드블록 제거
   let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -25,16 +23,23 @@ function safeJsonParse(rawText: string) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  // 1차 파싱 시도
+  // 3. [핵심] JSON.parse 실행 전 \f, \t 변환 방지:
+  // LaTeX 전용 명령어(\frac, \times, \left 등) 앞의 단일 역슬래시를 이중 역슬래시(\\)로 선제 치환
+  cleanText = cleanText.replace(
+    /\\(frac|dfrac|times|div|sqrt|left|right|pm|cdot|displaystyle)([^\w]|$)/g,
+    "\\\\$1$2"
+  );
+
+  // 4. 안전 파싱 시도
   try {
     return JSON.parse(cleanText);
   } catch (initialError) {
-    // LaTeX 역슬래시(\times, \frac 등)가 JSON에서 유효하지 않은 이스케이프로 인식될 때 이중 역슬래시로 보정
+    // 잔여 역슬래시가 있을 경우 일반 알파벳 이스케이프 전체를 보정 후 재시도
     try {
       const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
       return JSON.parse(fixedText);
     } catch {
-      throw initialError; // 보정 후에도 실패 시 원본 에러 투척
+      throw initialError;
     }
   }
 }
@@ -65,7 +70,6 @@ export async function POST(req: NextRequest) {
       },
     };
 
-// app/api/analyze/route.ts 프롬프트 보강 부분
     const prompt = `
 당신은 대한민국 초·중등 수학 교육과정 전문 AI 홈코치입니다.
 첨부된 이미지를 정밀 분석하여 요청된 모드("${mode}")에 맞추어 **오직 순수 JSON 형식**으로만 답변하세요.
@@ -83,14 +87,12 @@ export async function POST(req: NextRequest) {
    - 아이가 적은 최종 답안('student_answer')이 계산된 'correct_answer'와 수학적으로 동일한 값이면 반드시 'is_correct: true'로 판정하세요.
    - 풀이 과정이 맞았는데 억지로 오답을 만들거나, 맞춘 답에 대해 존재하지 않는 오류를 지적하지 마세요.
 
-[수식 표기]:
-수식은 LaTeX 문법($...$)을 적용하고, JSON 파싱 오류가 없도록 올바르게 작성하세요.
-      
-[수식 표기 필수 규칙]
-- 분수, 제곱, 음수 괄호, 곱셈 기호(\times) 등 모든 수학적 수식과 식은 반드시 앞뒤에 달러 기호($)를 붙여 인라인 LaTeX 형식($...$)으로 출력하세요.
-- 올바른 예시: "$\left(-\frac{1}{28}\right) \times (-4) = +\frac{1}{7}$"
-- 잘못된 예시: "\left(-\frac{1}{28}\right) \times (-4)" (달러 기호 누락 금지)
-- 한 문장 안에 수식이 여러 개 나올 때도 각각 $ 기호로 감싸야 합니다.
+[수식 표기 필수 규칙]:
+- 분수, 거듭제곱, 음수 괄호, 곱셈 기호 등 모든 수학적 수식은 반드시 앞뒤에 달러 기호($)를 붙여 인라인 LaTeX 형식($...$)으로 출력하세요.
+- JSON 포맷 규격상 역슬래시는 반드시 이스케이프(\\\\)하여 작성하세요.
+  - 올바른 예: "$\\\\left(-\\\\frac{1}{28}\\\\right) \\\\times (-4) = +\\\\frac{1}{7}$"
+  - 잘못된 예: "\\left(-\\frac{1}{28}\\right) \\times (-4)" (달러 기호 누락 및 역슬래시 1개 금지)
+- 한 문장 안에 수식이 여러 개 나올 때도 각 수식마다 $ 기호로 감싸야 합니다.
 
 [JSON 반환 스키마]:
 {
@@ -99,7 +101,7 @@ export async function POST(req: NextRequest) {
     {
       "problem_number": "문항 번호 (예: 1번)",
       "problem_text": "문제 지문 요약",
-      "correct_answer": "정답",
+      "correct_answer": "정답 (수식일 경우 $...$ 포함)",
       "solution_steps": ["1단계 풀이", "2단계 풀이"],
       "concept": "단원 및 핵심 개념",
       ${
@@ -130,7 +132,7 @@ export async function POST(req: NextRequest) {
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
-            responseMimeType: "application/json", // JSON 모드 강제
+            responseMimeType: "application/json",
             temperature: 0.2,
           },
         });
@@ -142,15 +144,13 @@ export async function POST(req: NextRequest) {
         parsedData = safeJsonParse(responseText);
 
         console.log(`[AI 분석 성공] 사용된 모델: ${modelName}`);
-        break; // 성공 시 루프 탈출
+        break;
       } catch (err: any) {
         console.warn(`[AI 분석 실패 - 모델: ${modelName}]`, err?.message || err);
         lastError = err;
-        // 다음 모델로 계속 진행 (사용자 화면에는 에러 노출 안 됨)
       }
     }
 
-    // 모든 모델이 실패했을 경우에만 클라이언트에 500 에러 전달
     if (!parsedData) {
       console.error("[모든 모델 분석 실패]", lastError);
       return NextResponse.json(

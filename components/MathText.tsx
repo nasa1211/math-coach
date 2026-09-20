@@ -14,47 +14,38 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 1. 유령 제어문자(Form Feed \x0c, \f 등) 및 오염된 문자열 1차 청소
-  let cleaned = content
-    .replace(/[\x00-\x09\x0b\x0c\x0e-\x1f]/g, "") // 보이지 않는 숨은 제어문자 일괄 제거
-    .replace(/rac\{/g, "\\frac{")
-    .replace(/(^|[^\\])times\b/g, "$1\\times ")
-    .replace(/(^|[^\\])div\b/g, "$1\\div ");
+  // 1. 보이지 않는 제어문자 제거 및 깨진 문자열(\t, \f) 복원
+  let text = content
+    .replace(/[\x00-\x09\x0b\x0c\x0e-\x1f]/g, "")
+    // 깨진 \times 및 \frac 복원
+    .replace(/(^|[^a-zA-Z\\])imes\b/g, "$1\\times ")
+    .replace(/(^|[^a-zA-Z\\])rac\{/g, "$1\\frac{");
 
-  // 2. 이미 $...$ 로 묶여있는 수식 보호
+  // 2. 이미 $...$ 로 묶인 수식 보호
   const preserved: string[] = [];
-  cleaned = cleaned.replace(/\$([^$]+?)\$/g, (_, math) => {
+  text = text.replace(/\$([^$]+?)\$/g, (_, math) => {
     preserved.push(math);
-    return `__MATH_${preserved.length - 1}__`;
+    return `__MATH_SAFE_${preserved.length - 1}__`;
   });
 
-  // 3. 문장 속에서 괄호/숫자/수식이 결합된 식 전체를 감지해 $...$ 로 래핑
-  // 예: (-0.2) \times (- \frac{6}{11}) \times (-5)
-  // 예: \displaystyle (-0.2) \times ...
-  // 예: -\frac{6}{11}
-  const mathFormulaRegex =
-    /(?:\\displaystyle\s*)?(?:[+\-]?\s*(?:\([^\)\n]+\)|[0-9a-zA-Z\.]+|\\frac\{[^{}]+\}\{[^{}]+\})\s*(?:\\times|\\div|[+\-*=/]|<|>|<=|>=|!=|=)\s*)+(?:\([^\)\n]+\)|[0-9a-zA-Z\.]+|\\frac\{[^{}]+\}\{[^{}]+\})/g;
-
-  cleaned = cleaned.replace(mathFormulaRegex, (match) => {
-    // 이미 래핑된 플레이스홀더가 포함되어 있다면 스킵
-    if (match.includes("__MATH_")) return match;
-    const cleanExpr = match.replace(/\\displaystyle\s*/g, "").trim();
-    return `$\\displaystyle ${cleanExpr}$`;
-  });
-
-  // 4. 단독으로 남아있는 분수 및 음수 분수 (예: -\frac{6}{11}, \frac{1}{5}) 래핑
-  cleaned = cleaned.replace(
-    /(?<!\$)(?:\\displaystyle\s*)?([+\-]?\s*\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
-    (_, frac) => `$\\displaystyle ${frac.trim()}$`
+  // 3. 연산식 전체(예: (-0.2) \times (-5) \times \frac{6}{11})를 탐지하여 $...$ 자동 래핑
+  text = text.replace(
+    /((?:\([+\-]?[0-9a-zA-Z./\\]+\)|[+\-]?[0-9a-zA-Z./\\]+|\\frac\{[^{}]+\}\{[^{}]+\})\s*(?:\\times|\\div|[+\-*=/]|<|>|<=|>=)\s*)+(?:\([+\-]?[0-9a-zA-Z./\\]+\)|[+\-]?[0-9a-zA-Z./\\]+|\\frac\{[^{}]+\}\{[^{}]+\})/g,
+    (m) => {
+      if (m.includes("__MATH_SAFE_")) return m;
+      return `$${m.trim()}$`;
+    }
   );
 
-  // 5. 보호했던 수식 복원 (분수가 들어있으면 \displaystyle 적용하여 겹침 방지)
-  cleaned = cleaned.replace(/__MATH_(\d+)__/g, (_, idx) => {
-    let original = preserved[Number(idx)].trim();
-    if (original.includes("\\frac") && !original.includes("\\displaystyle")) {
-      original = `\\displaystyle ${original}`;
-    }
-    return `$${original}$`;
+  // 4. 개별 분수(예: -\frac{6}{11}, \frac{1}{5}) 래핑
+  text = text.replace(
+    /(?<!\$)([+\-]?\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
+    (m) => `$${m.trim()}$`
+  );
+
+  // 5. 보호한 수식 복원
+  text = text.replace(/__MATH_SAFE_(\d+)__/g, (_, idx) => {
+    return `$${preserved[Number(idx)]}$`;
   });
 
   return (
@@ -63,7 +54,7 @@ export default function MathText({ content }: MathTextProps) {
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
       >
-        {cleaned}
+        {text}
       </ReactMarkdown>
     </div>
   );
