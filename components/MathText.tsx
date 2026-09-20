@@ -14,37 +14,40 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 1. JSON 직렬화 과정에서 탈락한 백슬래시 및 깨진 LaTeX 명령어 자동 복구
-  let repaired = content
-    // \f가 증발하여 ' rac' 또는 '-rac'이 된 경우 복구
+  // 1. JSON 이스케이프로 인해 깨진 제어문자(\x0c=FormFeed, \t=Tab) 원천 복구
+  let text = content
+    // \f가 공백문자(\x0c)로 바뀐 채 뒤에 frac이 붙은 것 복구: \frac -> \frac
+    .replace(/[\x0c\f]\s*\\?frac/g, "\\frac")
+    // \f가 날아가서 rac만 남은 것 복구: rac{ -> \frac{
     .replace(/(^|[^a-zA-Z\\])rac\{/g, "$1\\frac{")
-    .replace(/(^|[^a-zA-Z\\])dfrac\{/g, "$1\\dfrac{")
-    // \t가 탭 문자로 바뀌어 'imes'가 된 경우 복구
-    .replace(/(^|[^a-zA-Z\\])imes\b/g, "$1\\times ")
-    // \d가 날아간 'div' 복구
-    .replace(/(^|[^a-zA-Z\\])div\b/g, "$1\\div ")
-    // \s가 날아간 'qrt' 복구
-    .replace(/(^|[^a-zA-Z\\])qrt\{/g, "$1\\sqrt{");
+    // \t가 탭 문자로 바뀐 것 복구: imes -> \times
+    .replace(/[\t]\s*\\?times/g, "\\times")
+    .replace(/(^|[^a-zA-Z\\])imes\b/g, "$1\\times");
 
   // 2. 이미 $...$ 로 감싸진 수식 임시 보호
   const preserved: string[] = [];
-  let sanitized = repaired.replace(/\$([^$]+?)\$/g, (_, math) => {
+  let sanitized = text.replace(/\$([^$]+?)\$/g, (_, math) => {
     preserved.push(math);
     return `__PRESERVED_${preserved.length - 1}__`;
   });
 
-  // 3. 수식 기호(\frac, \times, ^, _, \left 등)가 포함된 문장을 감지하여 $...$ 자동 래핑
+  // 3. 문장 줄 단위로 수식(\frac, \times, ^, _, \left 등) 자동 래핑 및 \displaystyle 적용
   const lines = sanitized.split("\n").map((line) => {
-    const hasLatex = /\\(frac|dfrac|times|div|sqrt|left|right|pm)/.test(line);
+    const hasLatex = /\\(frac|times|div|sqrt|left|right|pm)/.test(line);
     if (!hasLatex) return line;
 
-    // 앞의 리스트 원문자/번호(• ①, 1.) 분리
+    // 리스트 기호/원문자(• ①, 1.) 분리
     const match = line.match(/^([\s\t*•\-\d().①-⑩]*\s*)([\s\S]+)$/);
     if (match && match[2]) {
       const prefix = match[1] || "";
-      const body = match[2].trim();
-      if (!body.startsWith("$") && !body.endsWith("$")) {
-        return `${prefix}$${body}$`;
+      let formula = match[2].trim();
+
+      if (!formula.startsWith("$") && !formula.endsWith("$")) {
+        // \frac이 있으면 분자가 분모와 겹치지 않도록 \displaystyle 부여
+        if (formula.includes("\\frac") && !formula.includes("\\displaystyle")) {
+          formula = `\\displaystyle ${formula}`;
+        }
+        return `${prefix}$${formula}$`;
       }
     }
     return line;
@@ -52,15 +55,19 @@ export default function MathText({ content }: MathTextProps) {
 
   let processed = lines.join("\n");
 
-  // 4. 문장 중간에 덩그러니 놓인 인라인 분수(\frac{a}{b}) 개별 $ 래핑
+  // 4. 문장 중간에 섞여 있는 잔여 \frac 인라인 수식 처리
   processed = processed.replace(
-    /(?<!\$)([+\-]?\\(?:frac|dfrac)\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
-    (m) => `$${m.trim()}$`
+    /(?<!\$)([+\-]?\\frac\{[^{}]+\}\{[^{}]+\})(?!\$)/g,
+    (m) => `$\\displaystyle ${m.trim()}$`
   );
 
   // 5. 보호했던 수식 복원
   processed = processed.replace(/__PRESERVED_(\d+)__/g, (_, idx) => {
-    return `$${preserved[Number(idx)]}$`;
+    let original = preserved[Number(idx)];
+    if (original.includes("\\frac") && !original.includes("\\displaystyle")) {
+      original = `\\displaystyle ${original}`;
+    }
+    return `$${original}$`;
   });
 
   return (
