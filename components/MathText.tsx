@@ -14,19 +14,23 @@ interface MathTextProps {
 export default function MathText({ content }: MathTextProps) {
   if (!content) return null;
 
-  // 1. 이미 올바르게 $...$로 감싸진 수식을 임시 플레이스홀더로 보호
-  const preservedMath: string[] = [];
-  const sanitized = content.replace(/\$([^\$]+?)\$/g, (_, math) => {
-    preservedMath.push(math);
-    return `__PRESERVED_MATH_${preservedMath.length - 1}__`;
+  // 1. 이미 $...$로 감싸진 수식 임시 보호
+  const preserved: string[] = [];
+  const sanitized = content.replace(/\$([^$]+?)\$/g, (_, math) => {
+    preserved.push(math);
+    return `__PRESERVED_${preserved.length - 1}__`;
   });
 
-  // 2. 줄(Line) 단위로 쪼개어 수식 명령어 감지 및 자동 래핑
+  // 2. 줄 단위 수식 감지 및 안전한 래핑
   const lines = sanitized.split("\n").map((line) => {
-    const hasLatex = /\\(frac\vert{}left\vert{}right\vert{}times\vert{}div\vert{}pm\vert{}sqrt)/.test(line);     if (!hasLatex) return line;      // prefixMatch 선언부     const prefixMatch = line.match(/^([\s\t*•\-\d\(\)①-⑩\.]*\s*)([\s\S]+)$/);
-    if (prefixMatch) {
-      const prefix = prefixMatch[1];
-      const formula = prefixMatch[2].trim();
+    const hasLatex = /\\(frac|left|right|times|div|pm|sqrt)/.test(line);
+    if (!hasLatex) return line;
+
+    // 리스트 기호/원문자(prefix)와 수식 분리
+    const matchResult = line.match(/^([\s\t*•\-\d().①-⑩]*\s*)([\s\S]+)$/);
+    if (matchResult && matchResult[2]) {
+      const prefix = matchResult[1] || "";
+      const formula = matchResult[2].trim();
 
       if (!formula.startsWith("$") && !formula.endsWith("$")) {
         return `${prefix}$${formula}$`;
@@ -38,15 +42,15 @@ export default function MathText({ content }: MathTextProps) {
 
   let processed = lines.join("\n");
 
-  // 3. 인라인 수식 보완
+  // 3. 인라인 미감싸기 수식 보완
   processed = processed.replace(
-    /(?<!\$)([+\-]?\\(?:frac\vert{}left\vert{}right)[^\$\n]+?)(?!\$)(?=\s\vert{}[,.\)\]]|$)/g,
+    /(?<!\$)([+\-]?\\(?:frac|left|right)[^$\n]+?)(?!\$)(?=\s|[,.)\]]|$)/g,
     (m) => `$${m.trim()}$`
   );
 
-  // 4. 보호된 수식 복원
-  processed = processed.replace(/__PRESERVED_MATH_(\d+)__/g, (_, idx) => {
-    return `$${preservedMath[Number(idx)]}$`;
+  // 4. 보호 수식 복원
+  processed = processed.replace(/__PRESERVED_(\d+)__/g, (_, idx) => {
+    return `$${preserved[Number(idx)]}$`;
   });
 
   return (
