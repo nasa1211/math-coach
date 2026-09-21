@@ -13,12 +13,13 @@ const CANDIDATE_MODELS = [
   "gemini-1.5-pro",
 ];
 
-// LaTeX 수식 역슬래시(\)로 인한 JSON 파싱 에러 방어 함수
 function safeJsonParse(rawText: string) {
-  // 1. 마크다운 코드블록 제거
   let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
-  // 2. 가장 바깥쪽 { ... } 추출
+  // JSON 내부에서 깨진 역슬래시 복구 (단일 \frac -> \\frac 등)
+  cleanText = cleanText
+    .replace(/([{,]\s*"[^"]+"\s*:\s*"[^"]*)\\(frac|times|div|pm|leq|geq)/g, "$1\\\\$2");
+
   const firstBrace = cleanText.indexOf("{");
   const lastBrace = cleanText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1) {
@@ -84,6 +85,11 @@ const prompt = `
 - 올바른 예시: "$\left(-\frac{1}{28}\right) \times (-4) = +\frac{1}{7}$"
 - 잘못된 예시: "\left(-\frac{1}{28}\right) \times (-4)" (달러 기호 누락 금지)
 - 한 문장 안에 수식이 여러 개 나올 때도 각각 $ 기호로 감싸야 합니다.
+
+[수식 표기 및 JSON 역슬래시 필수 규칙]:
+- LaTeX 수식을 작성할 때, 분수 등 역슬래시가 들어가는 명령어는 반드시 이중 백슬래시(\\frac, \\times 등)를 사용하여 JSON 문자열 내에서 유실되지 않도록 하세요.
+- 올바른 예시: "$\\frac{100}{x}$", "$\\frac{4}{x}$"
+- 잘못된 예시: "$\frac{100}{x}$" (백슬래시가 단일이면 JSON 파싱 시 깨지므로 금지)
 
 [JSON 반환 스키마]:
 {
