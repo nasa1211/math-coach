@@ -19,9 +19,6 @@ function fixMathExpression(str: string): string {
 
   let res = str;
 
-  // 추가: $ 기호 없이 \frac 이 시작하는 경우 자동으로 $...$ 로 감싸주기 (방어 로직)
-  res = res.replace(/(?<!\$)\\frac\{[^}]+\}\{[^}]+\}(?!\$)/g, "$&$");
-  
   // 1. 유실된 제어 문자(Form Feed \x0C 등) 제거
   res = res.replace(/[\x0C]/g, "");
 
@@ -29,16 +26,24 @@ function fixMathExpression(str: string): string {
   res = res.replace(/([^\n])\s*([①②③④⑤⑥⑦⑧⑨⑩])/g, "$1\n$2");
   res = res.replace(/([^\n])\s*(\d+단계:)/g, "$1\n$2");
 
-  // 3. 역슬래시가 빠진 LaTeX 키워드 강제 복구
+  // 3. 역슬래시가 빠진 LaTeX 키워드 강제 복구 (frac, times, div, pm 등)
   res = res.replace(/(?<!\\)\b(frac|times|div|pm|neq|sqrt|pi|left|right)\b/g, "\\$1");
 
   // 4. 중괄호 없이 숫자가 뭉친 분수 구문 완벽 복구
-  // 예: \frac1825 -> \frac{18}{25}
   res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
-  // 예: \frac35 -> \frac{3}{5}, -\frac65 -> -\frac{6}{5}
   res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
-  // 예: \fracxy -> \frac{x}{y}
   res = res.replace(/\\frac\s*([a-zA-Z])\s*([a-zA-Z])/g, "\\frac{$1}{$2}");
+
+  // 5. [방어 로직] $...$ 로 감싸이지 않은 수식 덩어리를 자동 포착하여 $...$ 로 감싸기
+  // (예: y = -\frac{3}{4}x 또는 \times (-4) 처럼 역슬래시 수식이 $ 밖에 노출된 경우)
+  res = res.replace(
+    /(?<!\$)(?:\b[a-zA-Z]\s*=\s*)?(-?\\frac\{[^}]+\}\{[^}]+\}[a-zA-Z0-9_*\/+-]*|\\times\s*(?:\([^)]+\)|[0-9a-zA-Z]+))(?!\$)/g,
+    "$$&$"
+  );
+
+  // 6. 홀로 존재하는 $ 제거 및 연속된 $$ 수식 분리 방지 (짝 맞춤 예외 처리)
+  // 단독 닫는 $ 등 오염 데이터 교정
+  res = res.replace(/([^$])\$(?![$\s\n0-9a-zA-Z\\{}(),.+-=])/g, "$1");
 
   return res;
 }
