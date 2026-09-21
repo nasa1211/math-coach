@@ -23,6 +23,8 @@ function safeJsonParse(rawText: string) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
+  // 0. AI가 역슬래시를 과도하게 중첩해서 보낸 경우 바로잡기
+  cleanText = cleanText.replace(/\\\\+/g, "\\");
   // 🚨 [강력 자동 교정 로직]
   // 1. 공백이나 제어문자가 낀 frac 형태 교정
   cleanText = cleanText
@@ -109,8 +111,8 @@ export async function POST(req: NextRequest) {
 [수식 줄바꿈 및 결합 엄격 규칙]:
 1. 등식이 포함된 수식은 절대 좌변($y =$)과 우변을 쪼개서 작성하지 마세요. 반드시 하나의 달러 기호 안에 좌변, 등호, 우변을 모두 함께 넣어야 합니다.
 2. **[매우 중요] 보기 대입 풀이(①, ②, ③ 등)를 작성할 때, 절대 대입식($x = ...$)을 길게 늘여서 쪼개 쓰지 마세요.** 마이너스(-) 기호나 분수가 줄바꿈되면 안 됩니다.
-   - 올바른 예시: "① $x = -15$ 대입: $\frac{3}{5} \times (-15) = -9$ (성립하지 않음)"
-   - 올바른 예시: "② $x = -\frac{6}{5}$ 대입: $\frac{3}{5} \times \left(-\frac{6}{5}\right) = -\frac{18}{25} \neq -\frac{1}{2}$ (성립하지 않음)"
+   - 올바른 예시: "① $x = -15$ 대입: $y = \\frac{3}{5} \\times (-15) = -9$ (성립하지 않음)"
+   - 올바른 예시: "② $x = -\\frac{6}{5}$ 대입: $y = \\frac{3}{5} \\times \\left(-\\frac{6}{5}\\right) = -\\frac{18}{25}$ (성립하지 않음)"
 3. 각 보기의 풀이는 반드시 **한 줄(Single Line)** 안에 모두 들어가도록 수식을 간결하게 구성하고, 절대 줄바꿈 문자를 수식 중간에 넣지 마세요.
 
 [JSON 반환 스키마]:
