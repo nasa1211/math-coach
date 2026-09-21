@@ -39,7 +39,8 @@ interface HistoryRecord {
   summaryTitle: string;
 }
 
-type TabType = "camera" | "result" | "history";
+// 탭 타입에 "settings" 추가
+type TabType = "camera" | "result" | "history" | "settings";
 
 const GRADE_LOADING_STEPS = [
   "문제집 이미지와 손글씨 풀이를 스캔하고 있습니다...",
@@ -89,7 +90,7 @@ async function compressImage(file: File): Promise<Blob> {
         }
       } else {
         if (height > MAX_HEIGHT) {
-          width = Math.round((width * MAX_HEIGHT) / height);
+          width = Math.round((height * MAX_HEIGHT) / height);
           height = MAX_HEIGHT;
         }
       }
@@ -128,8 +129,6 @@ export default function MathCoachPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
-  // 설정 바텀 시트 오픈 상태
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [fontScale, setFontScale] = useState<string>("1.0");
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
@@ -941,9 +940,81 @@ export default function MathCoachPage() {
             )}
           </div>
         )}
+
+        {/* 설정 탭 컨텐츠 (자연스러운 탭 이동 화면) */}
+        {activeTab === "settings" && (
+          <div className="max-w-xl mx-auto space-y-6 animate-fadeIn">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>⚙️</span>
+                <span>앱 환경 설정</span>
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                화면 테마, 글자 크기 및 계정 보안을 설정합니다.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+              {/* 라이트/다크 모드 토글 */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  🌙 다크 모드
+                </span>
+                <button
+                  onClick={toggleDarkMode}
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer ${
+                    isDarkMode ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
+                  }`}
+                >
+                  <div
+                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                      isDarkMode ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* 폰트 크기 조절 */}
+              <div className="pb-4 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
+                  본문 및 수식 글자 크기
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "기본 (100%)", value: "1.0" },
+                    { label: "크게 (115%)", value: "1.15" },
+                    { label: "매우 크게 (130%)", value: "1.3" },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      onClick={() => changeFontScale(item.value)}
+                      className={`py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                        fontScale === item.value
+                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 로그아웃 / 잠금 */}
+              <div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full py-3.5 text-sm font-semibold text-red-500 bg-red-50 dark:bg-red-950/30 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors cursor-pointer border border-red-100 dark:border-red-900/40"
+                >
+                  🔒 화면 잠금 (로그아웃)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
-      {/* 3. 모바일 하단 탭 바 (설정 탭 추가: 총 4개 버튼) */}
+      {/* 3. 모바일 하단 탭 바 (설정 탭 포함 총 4개 버튼) */}
       <nav
         className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
           isDesktop || showBottomNav ? "translate-y-0" : "translate-y-full"
@@ -997,11 +1068,15 @@ export default function MathCoachPage() {
             )}
           </button>
 
-          {/* 설정 탭 (바텀 시트 오픈) */}
+          {/* 설정 탭 버튼 (탭 전환 방식으로 수정) */}
           <button
             type="button"
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-all cursor-pointer"
+            onClick={() => setActiveTab("settings")}
+            className={`flex flex-col items-center justify-center h-full transition-all cursor-pointer ${
+              activeTab === "settings"
+                ? "text-indigo-600 dark:text-indigo-400 scale-105"
+                : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+            }`}
           >
             <span className="text-xl sm:text-2xl landscape:text-lg">⚙️</span>
             <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">설정</span>
@@ -1009,84 +1084,7 @@ export default function MathCoachPage() {
         </div>
       </nav>
 
-      {/* 4. 설정 바텀 시트 모달 */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md p-6 bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl border-t border-slate-100 dark:border-slate-800 space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                <span>⚙️</span> 앱 환경 설정
-              </h3>
-              <button
-                onClick={() => setIsSettingsOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* 라이트/다크 모드 토글 */}
-            <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                🌙 다크 모드
-              </span>
-              <button
-                onClick={toggleDarkMode}
-                className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
-                  isDarkMode ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
-                }`}
-              >
-                <div
-                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
-                    isDarkMode ? "translate-x-6" : "translate-x-0"
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* 폰트 크기 조절 */}
-            <div className="py-2 border-b border-slate-100 dark:border-slate-800 space-y-2">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
-                본문 및 수식 글자 크기
-              </span>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: "기본 (100%)", value: "1.0" },
-                  { label: "크게 (115%)", value: "1.15" },
-                  { label: "매우 크게 (130%)", value: "1.3" },
-                ].map((item) => (
-                  <button
-                    key={item.value}
-                    onClick={() => changeFontScale(item.value)}
-                    className={`py-2 text-xs font-semibold rounded-xl transition-all ${
-                      fontScale === item.value
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 로그아웃 / 잠금 */}
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  setIsSettingsOpen(false);
-                  handleLogout();
-                }}
-                className="w-full py-3 text-sm font-semibold text-red-500 bg-red-50 dark:bg-red-950/30 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-              >
-                🔒 화면 잠금 (로그아웃)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. 이미지 자르기 모달 */}
+      {/* 4. 이미지 자르기 모달 (유지) */}
       {isCropperOpen && rawImageSrc && (
         <div className="relative z-[9999]">
           <ImageCropperModal
