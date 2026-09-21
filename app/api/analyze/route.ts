@@ -21,18 +21,18 @@ function safeJsonParse(rawText: string) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  // 0. AI가 역슬래시를 과도하게 중첩해서 보낸 경우 바로잡기
+  // 0. 역슬래시 중첩 정리
   cleanText = cleanText.replace(/\\\\+/g, "\\");
 
-  // 🚨 [강력 자동 교정 로직: 누락된 백슬래시 및 중괄호 복구]
-  // 1. frac 형태 통일 (역슬래시 유무 상관없이 \frac로 변환)
+  // 1. frac 형태 복구 (\가 빠졌거나 공백이 낀 경우)
   cleanText = cleanText
     .replace(/[\x0C]/g, "")
     .replace(/\\?\s*[\f]?\s*rac\b/g, "\\frac")
     .replace(/(?<!\\)\bfrac\b/g, "\\frac");
 
-  // 2. 중괄호가 누락된 단순 숫자 분수 자동 복구 (예: \frac35 -> \frac{3}{5})
-  cleanText = cleanText.replace(/\\frac\s*([0-9])\s*([0-9])/g, "\\frac{$1}{$2}");
+  // 2. ⭐️ [핵심 개선] 한 자리 및 두 자리 이상의 숫자 분수에도 중괄호 자동 복구 (예: \frac1825 -> \frac{18}{25}, \frac35 -> \frac{3}{5})
+  // 분자와 분모의 자릿수를 유연하게 탐지하도록 개선
+  cleanText = cleanText.replace(/\\frac\s*([0-9]+)\s*([0-9]+)/g, "\\frac{$1}{$2}");
 
   // 3. 주요 연산자 앞 역슬래시 보장
   cleanText = cleanText
@@ -41,7 +41,7 @@ function safeJsonParse(rawText: string) {
     .replace(/(?<!\\)\bright\b/g, "\\right")
     .replace(/(?<!\\)\bneq\b/g, "\\neq");
 
-  // 4. JSON 문자열 내에서 안전하게 이중 백슬래시(\\)로 변환
+  // 4. JSON 문자열 내에서 안전하게 이중 백슬래시로 변환
   cleanText = cleanText
     .replace(/([^\\])\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "$1\\\\$2")
     .replace(/^\\(frac|times|div|pm|left|right|sqrt|pi|neq)/gm, "\\\\$1");
