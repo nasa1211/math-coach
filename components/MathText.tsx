@@ -13,14 +13,18 @@ interface MathTextProps {
 export default function MathText({ content, className = "" }: MathTextProps) {
   if (!content) return null;
 
-  // 정규식으로 $$...$$ (블록 수식) 및 $...$ (인라인 수식) 분리
-  const parts = content.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
+  // 1. JSON 파싱 과정에서 유실된 '\t'로 인해 깨진 'imes'를 '\times'로 복구
+  const fixedContent = content
+    .replace(/(\d)\s*imes\s*(\d)/g, "$1 \\times$2")
+    .replace(/\bimes\b/g, "\\times");
+
+  // 2. 정규식으로 $$...$$ (블록 수식) 및 $...$ (인라인 수식) 분리
+  const parts = fixedContent.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
 
   return (
     <span 
       className={`inline-block max-w-full overflow-x-auto align-middle ${className}`}
       style={{
-        // 모바일 터치 확대/축소(Pinch-to-zoom) 및 부드러운 스크롤 활성화
         touchAction: "pan-x pan-y pinch-zoom",
         WebkitOverflowScrolling: "touch",
       }}
