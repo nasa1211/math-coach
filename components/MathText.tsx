@@ -33,17 +33,18 @@ export default function MathText({ content, className = "" }: MathTextProps) {
       }}
     >
       {parts.map((part, index) => {
+        // 블록 수식으로 들어오더라도 문장이 끊기지 않도록 displayMode: false로 인라인처럼 안전 처리
         if (part.startsWith("$$") && part.endsWith("$$")) {
           const math = part.slice(2, -2).trim();
           try {
             const html = katex.renderToString(math, {
-              displayMode: true,
+              displayMode: false,
               throwOnError: false,
             });
             return (
               <span
                 key={index}
-                className="block my-2 text-center"
+                className="inline-block mx-0.5 align-baseline"
                 dangerouslySetInnerHTML={{ __html: html }}
               />
             );

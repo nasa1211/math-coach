@@ -31,7 +31,6 @@ function safeJsonParse(rawText: string) {
     .replace(/\bfract?\b/g, "\\frac");
 
   // 2. 중괄호가 누락된 형태(예: \frac5x 등)를 자동으로 \frac{5}{x} 형태로 변환하는 정밀 보정
-  // 예: \frac5x -> \frac{5}{x}, \frac100x -> \frac{100}{x} 등
   cleanText = cleanText.replace(/\\frac\s*([0-9a-zA-Z\-\+]+)\s*([0-9a-zA-Z\-\+]+)/g, "\\frac{$1}{$2}");
 
   // 3. JSON 문자열 내에서 안전하게 이중 백슬래시(\\)로 변환
@@ -92,22 +91,15 @@ const prompt = `
 1. 거듭제곱의 지수(예: 2³, 3ᵃ, x²)를 일반 정수(23, 3a)로 오인하지 않도록 글자 크기와 높이를 주의 깊게 확인하세요.
 2. 곱셈 기호(×), 덧셈(+), 마이너스(-), 소수점(.), 쉼표(,)를 명확하게 구분하세요.
 3. **[필수] 객관식 보기 및 수식 검증**: 문제에 포함된 보기(①, ②, ③, ④, ⑤ 등)나 등식의 참/거짓을 판별할 때, **각 등식의 좌변과 우변을 실제로 엄밀하게 계산하여 수학적으로 완전히 일치하는지 철저히 검산**하세요. 
-   - 예: 만약 보기 중 '\frac{1}{3} \times \frac{1}{3} = \frac{2}{3^2}'과 같은 식이 있다면, 좌변은 \frac{1}{9}인데 우변은 \frac{2}{9}(또는 잘못된 값)이 되므로 이는 **명백한 수학적 오류(오답)**임을 정확히 포착해야 합니다. 수식을 대충 읽고 맞다고 넘어가면 절대 안 됩니다.
 4. 아이의 손글씨 답안을 먼저 정확하게 읽고, 교재 인쇄본 문제의 조건과 단계별로 대조하여 정오답을 판정하세요.
 
-[수식 표기]:
-수식은 LaTeX 문법($...$)을 적용하고, JSON 파싱 오류가 없도록 올바르게 작성하세요.
-
 [수식 표기 필수 규칙]:
-1. 분수, 제곱, 음수 괄호, 곱셈 기호(\times) 등 모든 수학적 수식과 식은 반드시 앞뒤에 달러 기호($)를 붙여 인라인 LaTeX 형식($...$)으로 출력하세요.
-2. **[매우 중요] 분수는 반드시 중괄호가 포함된 \frac{분자}{분모} 형태로만 작성하세요.** (예: $\frac{100}{x}$, $\frac{5}{x}$, $-\frac{1}{3}x$, $\frac{3}{5}$)
-3. 절대 'frac100x'나 중괄호가 빠진 'frac5x' 같은 형태로 출력하지 마세요. 반드시 \frac{값}{값} 형식을 지켜야 합니다.
-4. JSON 문자열 내부에서 역슬래시는 반드시 이중 백슬래시(\\frac, \\times)로 작성되도록 하세요.
-
-[수식 표기 및 JSON 역슬래시 필수 규칙]:
-- LaTeX 수식을 작성할 때, 분수 등 역슬래시가 들어가는 명령어는 반드시 이중 백슬래시(\\frac, \\times 등)를 사용하여 JSON 문자열 내에서 유실되지 않도록 하세요.
-- 올바른 예시: "$\\frac{100}{x}$", "$\\frac{4}{x}$"
-- 잘못된 예시: "$\frac{100}{x}$" (백슬래시가 단일이면 JSON 파싱 시 깨지므로 금지)
+1. 모든 수학 수식(분수, 방정식, 기호 등)은 **반드시 인라인 LaTeX 형식인 단일 달러 기호($...$)로만** 작성하세요.
+2. **절대 전체 문장을 \`$$...$$
+\` (블록 수식)로 감싸거나, 수식 때문에 문장 중간에 임의로 줄바꿈을 넣지 마세요.** 문장이 위아래로 찢어지면 안 됩니다.
+   - 올바른 예시: "기울기는 $\\frac{3}{5}$ 입니다."
+3. **[매우 중요] 분수는 반드시 중괄호가 포함된 \\frac{분자}{분모} 형태로만 작성하세요.** (예: $\\frac{100}{x}$, $\\frac{5}{x}$, $-\\frac{1}{3}x$, $\\frac{3}{5}$)
+4. JSON 문자열 내부에서 역슬래시는 반드시 이중 백슬래시(\\\\frac, \\\\times)로 작성되도록 하세요.
 
 [JSON 반환 스키마]:
 {
@@ -139,7 +131,6 @@ const prompt = `
     let lastError: any = null;
     let parsedData = null;
 
-    // 🔄 모델 순차 폴백 루프 (503 또는 일시적 에러 발생 시 다음 모델로 자동 전환)
     for (const modelName of CANDIDATE_MODELS) {
       try {
         console.log(`[AI 분석 시도] 모델: ${modelName}`);
@@ -147,7 +138,7 @@ const prompt = `
         const model = genAI.getGenerativeModel({
           model: modelName,
           generationConfig: {
-            responseMimeType: "application/json", // JSON 모드 강제
+            responseMimeType: "application/json",
             temperature: 0.2,
           },
         });
@@ -155,19 +146,16 @@ const prompt = `
         const result = await model.generateContent([prompt, imagePart]);
         const responseText = result.response.text();
 
-        // JSON 안전 파싱
         parsedData = safeJsonParse(responseText);
 
         console.log(`[AI 분석 성공] 사용된 모델: ${modelName}`);
-        break; // 성공 시 루프 탈출
+        break;
       } catch (err: any) {
         console.warn(`[AI 분석 실패 - 모델: ${modelName}]`, err?.message || err);
         lastError = err;
-        // 다음 모델로 계속 진행 (사용자 화면에는 에러 노출 안 됨)
       }
     }
 
-    // 모든 모델이 실패했을 경우에만 클라이언트에 500 에러 전달
     if (!parsedData) {
       console.error("[모든 모델 분석 실패]", lastError);
       return NextResponse.json(
