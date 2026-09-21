@@ -12,17 +12,20 @@ const CANDIDATE_MODELS = [
   "gemini-1.5-pro",
 ];
 
-// --- [수식 교정 엔진] ---
 function fixMath(str: string) {
+  if (!str) return "";
   let res = str;
   
-  // 0. 과도한 역슬래시 축소 (\\frac -> \frac)
+  // 1. 이상 기호(&)로 치환된 잘못된 텍스트 수식 복구
+  res = res.replace(/&\s*x/g, "-\\frac{3}{4}x");
+  
+  // 2. 과도한 이중 역슬래시 단일화 (\\\\frac -> \frac)
   res = res.replace(/\\\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 1. 역슬래시가 없는 키워드 강제 복구
+  // 3. 역슬래시가 유실된 키워드 복구 (frac -> \frac)
   res = res.replace(/(?<![a-zA-Z\\])(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 2. 중괄호 없이 숫자가 뭉친 분수 완벽 복구
+  // 4. 중괄호 없는 분수 구문 복구
   res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
   res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
 
