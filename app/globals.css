@@ -113,3 +113,12 @@ html.is-pwa,
     -webkit-text-size-adjust: 100%;
   }
 }
+
+:root {
+  --font-scale: 1.0;
+}
+
+html {
+  /* 기본 폰트 사이즈에 --font-scale을 곱해줍니다 */
+  font-size: calc(16px * var(--font-scale, 1.0));
+}

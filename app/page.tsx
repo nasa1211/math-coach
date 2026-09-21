@@ -156,8 +156,10 @@ export default function MathCoachPage() {
 
       // 폰트 스케일 및 다크모드 초기값 동기화
       const savedScale = localStorage.getItem("font_scale");
-      if (savedScale) setFontScale(savedScale);
-
+      if (savedScale) {
+        setFontScale(savedScale);
+        document.documentElement.style.setProperty("--font-scale", savedScale); // 이 줄을 추가해주세요
+      }
       const dark = document.documentElement.classList.contains("dark");
       setIsDarkMode(dark);
     } catch (e) {
