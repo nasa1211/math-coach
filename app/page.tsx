@@ -425,18 +425,6 @@ export default function MathCoachPage() {
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline-block">
               수학 채점 & 학부모 지도 코칭
             </span>
-
-            <ThemeToggle />
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              title="로그아웃 (화면 잠금)"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer border border-slate-200/60 dark:border-slate-700"
-            >
-              <span>🔒</span>
-              <span className="hidden sm:inline">잠금</span>
-            </button>
           </div>
         </div>
       </header>
