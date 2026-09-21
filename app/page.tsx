@@ -128,6 +128,11 @@ export default function MathCoachPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
+  // 설정 바텀 시트 오픈 상태
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [fontScale, setFontScale] = useState<string>("1.0");
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
   // 최근 기록(히스토리) 상태
   const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
 
@@ -142,15 +147,22 @@ export default function MathCoachPage() {
   const currentLoadingSteps =
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
 
-  // 로컬 스토리지에서 기록 불러오기
+  // 로컬 스토리지에서 기록 및 설정 불러오기
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         setHistoryList(JSON.parse(saved));
       }
+
+      // 폰트 스케일 및 다크모드 초기값 동기화
+      const savedScale = localStorage.getItem("font_scale");
+      if (savedScale) setFontScale(savedScale);
+
+      const dark = document.documentElement.classList.contains("dark");
+      setIsDarkMode(dark);
     } catch (e) {
-      console.error("히스토리 로드 실패:", e);
+      console.error("초기 데이터 로드 실패:", e);
     }
   }, []);
 
@@ -166,10 +178,9 @@ export default function MathCoachPage() {
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
 
-  // 화면 크기 체크 (진짜 데스크톱 모니터 여부: 폭 768px 이상 & 높이 600px 이상)
+  // 화면 크기 체크
   useEffect(() => {
     const checkDesktop = () => {
-      // Pro Max 가로(높이 430px)는 isDesktop이 false가 됨!
       setIsDesktop(window.innerWidth >= 768 && window.innerHeight >= 600);
     };
     checkDesktop();
@@ -180,15 +191,12 @@ export default function MathCoachPage() {
   // 스크롤 이벤트 감지
   useEffect(() => {
     const handleScroll = () => {
-      // 진짜 PC 데스크톱 화면이면 항상 노출
       if (isDesktop) {
         setShowBottomNav(true);
         return;
       }
 
       const currentScrollY = window.scrollY;
-
-      // 최상단 근처일 때는 노출
       if (currentScrollY < 20) {
         setShowBottomNav(true);
         lastScrollY.current = currentScrollY;
@@ -197,7 +205,7 @@ export default function MathCoachPage() {
 
       if (Math.abs(currentScrollY - lastScrollY.current) > 10) {
         if (currentScrollY > lastScrollY.current) {
-          setShowBottomNav(false); // 프로맥스 가로에서도 아래로 내리면 숨김!
+          setShowBottomNav(false);
         } else {
           setShowBottomNav(true);
         }
@@ -209,7 +217,34 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isDesktop]);
 
-  // 새 분석 결과 로컬 히스토리에 저장
+  // 실시간 다크모드 토글 함수
+  const toggleDarkMode = () => {
+    const nextDark = !isDarkMode;
+    setIsDarkMode(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  };
+
+  // 실시간 폰트 크기 변경 함수
+  const changeFontScale = (scale: string) => {
+    setFontScale(scale);
+    localStorage.setItem("font_scale", scale);
+    document.documentElement.style.setProperty("--font-scale", scale);
+  };
+
+  // 로그아웃 처리 함수
+  const handleLogout = () => {
+    if (confirm("로그아웃하고 화면을 잠그시겠습니까?")) {
+      localStorage.removeItem("math_coach_auth");
+      window.location.reload();
+    }
+  };
+
   const saveToHistory = (mode: "grade" | "guide", problems: ProblemItem[]) => {
     if (!problems || problems.length === 0) return;
 
@@ -229,7 +264,7 @@ export default function MathCoachPage() {
     };
 
     setHistoryList((prev) => {
-      const updated = [newRecord, ...prev].slice(0, 30); // 최근 30개 유지
+      const updated = [newRecord, ...prev].slice(0, 30);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       } catch (e) {
@@ -239,7 +274,6 @@ export default function MathCoachPage() {
     });
   };
 
-  // 특정 히스토리 항목 불러오기
   const handleLoadHistoryItem = (item: HistoryRecord) => {
     setResults(item.problems);
     setResultMode(item.mode);
@@ -247,7 +281,6 @@ export default function MathCoachPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // 특정 히스토리 삭제
   const handleDeleteHistoryItem = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!confirm("이 분석 기록을 삭제하시겠습니까?")) return;
@@ -259,7 +292,6 @@ export default function MathCoachPage() {
     });
   };
 
-  // 전체 히스토리 삭제
   const handleClearAllHistory = () => {
     if (!confirm("모든 분석 기록을 삭제하시겠습니까?")) return;
     setHistoryList([]);
@@ -329,8 +361,6 @@ export default function MathCoachPage() {
 
       setResults(parsedProblems);
       setResultMode(appliedMode);
-
-      // 분석 성공 시 히스토리에 자동 추가
       saveToHistory(appliedMode, parsedProblems);
     } catch (err: any) {
       console.error("전송 에러:", err);
@@ -339,13 +369,6 @@ export default function MathCoachPage() {
       );
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    if (confirm("로그아웃하고 화면을 잠그시겠습니까?")) {
-      localStorage.removeItem("math_coach_auth");
-      window.location.reload();
     }
   };
 
@@ -420,9 +443,6 @@ export default function MathCoachPage() {
 
       {/* 2. 메인 컨텐츠 영역 */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {/* ==========================================
-            TAB 1: [문제 촬영]
-        ========================================== */}
         {activeTab === "camera" && (
           <div className="space-y-4 max-w-xl mx-auto animate-fadeIn">
             <div className="bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 shadow-inner transition-colors">
@@ -571,9 +591,6 @@ export default function MathCoachPage() {
           </div>
         )}
 
-        {/* ==========================================
-            TAB 2: [분석 결과 리포트]
-        ========================================== */}
         {activeTab === "result" && (
           <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
             {loading ? (
@@ -643,7 +660,6 @@ export default function MathCoachPage() {
                     }}
                     className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
-                    {/* 가로 찌그러짐을 수정한 2행 구조 헤더 */}
                     <div className="space-y-2.5 pb-1 border-b border-slate-100 dark:border-slate-800/60">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -835,9 +851,6 @@ export default function MathCoachPage() {
           </div>
         )}
 
-        {/* ==========================================
-            TAB 3: [최근 기록 (히스토리)] 뷰
-        ========================================== */}
         {activeTab === "history" && (
           <div className="max-w-xl mx-auto space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between pb-2">
@@ -915,7 +928,6 @@ export default function MathCoachPage() {
                         </p>
                       </div>
 
-                      {/* 삭제 버튼 */}
                       <button
                         type="button"
                         onClick={(e) => handleDeleteHistoryItem(e, item.id)}
@@ -943,13 +955,13 @@ export default function MathCoachPage() {
         )}
       </main>
 
-      {/* 3. 모바일 하단 탭 바 (md:!translate-y-0 완전 제거) */}
+      {/* 3. 모바일 하단 탭 바 (설정 탭 추가: 총 4개 버튼) */}
       <nav
         className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
           isDesktop || showBottomNav ? "translate-y-0" : "translate-y-full"
         }`}
       >
-      <div className="max-w-md mx-auto grid grid-cols-3 h-16 landscape:h-12 md:h-16 items-center px-4">
+        <div className="max-w-md mx-auto grid grid-cols-4 h-16 landscape:h-12 md:h-16 items-center px-2">
           <button
             type="button"
             onClick={() => setActiveTab("camera")}
@@ -975,7 +987,7 @@ export default function MathCoachPage() {
             <span className="text-xl sm:text-2xl landscape:text-lg">📊</span>
             <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">분석 결과</span>
             {results && results.length > 0 && (
-              <span className="absolute top-2 right-6 landscape:top-1 landscape:right-8 w-4 h-4 bg-indigo-600 text-white text-[9px] font-extrabold flex items-center justify-center rounded-full">
+              <span className="absolute top-2 right-4 landscape:top-1 landscape:right-5 w-4 h-4 bg-indigo-600 text-white text-[9px] font-extrabold flex items-center justify-center rounded-full">
                 {results.length}
               </span>
             )}
@@ -993,13 +1005,100 @@ export default function MathCoachPage() {
             <span className="text-xl sm:text-2xl landscape:text-lg">🕒</span>
             <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">최근 기록</span>
             {historyList.length > 0 && (
-              <span className="absolute top-2 right-6 landscape:top-1 landscape:right-8 w-2 h-2 bg-indigo-500 rounded-full" />
+              <span className="absolute top-2 right-4 landscape:top-1 landscape:right-5 w-2 h-2 bg-indigo-500 rounded-full" />
             )}
+          </button>
+
+          {/* 설정 탭 (바텀 시트 오픈) */}
+          <button
+            type="button"
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-all cursor-pointer"
+          >
+            <span className="text-xl sm:text-2xl landscape:text-lg">⚙️</span>
+            <span className="text-[11px] landscape:text-[10px] font-bold mt-0.5">설정</span>
           </button>
         </div>
       </nav>
 
-      {/* 4. 이미지 자르기 모달 */}
+      {/* 4. 설정 바텀 시트 모달 */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md p-6 bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl border-t border-slate-100 dark:border-slate-800 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span>⚙️</span> 앱 환경 설정
+              </h3>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 라이트/다크 모드 토글 */}
+            <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                🌙 다크 모드
+              </span>
+              <button
+                onClick={toggleDarkMode}
+                className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ${
+                  isDarkMode ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
+                }`}
+              >
+                <div
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ${
+                    isDarkMode ? "translate-x-6" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* 폰트 크기 조절 */}
+            <div className="py-2 border-b border-slate-100 dark:border-slate-800 space-y-2">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
+                본문 및 수식 글자 크기
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "기본 (100%)", value: "1.0" },
+                  { label: "크게 (115%)", value: "1.15" },
+                  { label: "매우 크게 (130%)", value: "1.3" },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    onClick={() => changeFontScale(item.value)}
+                    className={`py-2 text-xs font-semibold rounded-xl transition-all ${
+                      fontScale === item.value
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 로그아웃 / 잠금 */}
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  setIsSettingsOpen(false);
+                  handleLogout();
+                }}
+                className="w-full py-3 text-sm font-semibold text-red-500 bg-red-50 dark:bg-red-950/30 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+              >
+                🔒 화면 잠금 (로그아웃)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. 이미지 자르기 모달 */}
       {isCropperOpen && rawImageSrc && (
         <div className="relative z-[9999]">
           <ImageCropperModal
