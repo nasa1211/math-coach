@@ -12,6 +12,42 @@ const CANDIDATE_MODELS = [
   "gemini-1.5-pro",
 ];
 
+// --- [새롭게 도입된 강력한 수식 교정 엔진] ---
+// JSON 문자열을 억지로 수정하지 않고, 객체로 파싱한 후 텍스트 값만 찾아내어 안전하게 수식을 복구합니다.
+function fixMath(str: string) {
+  let res = str;
+  
+  // 0. AI가 줄바꿈(\\)으로 오작동하게 만든 과도한 역슬래시 축소 (\\frac -> \frac)
+  res = res.replace(/\\\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
+
+  // 1. 역슬래시가 없는 명령어 강제 복구 (단어 경계 검사를 없애어 frac35, -frac65 등 글자가 뭉쳐있어도 무조건 찾아냅니다)
+  res = res.replace(/(?<![a-zA-Z\\])(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
+
+  // 2. 중괄호 없이 숫자가 뭉친 엉망진창 분수 완벽 복구
+  // 예: \frac1825 -> \frac{18}{25} (두 자리 숫자 우선 처리)
+  res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
+  // 예: \frac35 -> \frac{3}{5} (한 자리 숫자 처리)
+  res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
+
+  return res;
+}
+
+// 객체 내부를 순회하며 텍스트만 쏙쏙 뽑아 수식을 교정하는 재귀 함수
+function fixMathInObject(obj: any): any {
+  if (typeof obj === 'string') {
+    return fixMath(obj);
+  } else if (Array.isArray(obj)) {
+    return obj.map(item => fixMathInObject(item));
+  } else if (obj !== null && typeof obj === 'object') {
+    const newObj: any = {};
+    for (const key in obj) {
+      newObj[key] = fixMathInObject(obj[key]);
+    }
+    return newObj;
+  }
+  return obj;
+}
+
 function safeJsonParse(rawText: string) {
   let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
@@ -21,41 +57,22 @@ function safeJsonParse(rawText: string) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  // 0. 역슬래시 중첩 정리
-  cleanText = cleanText.replace(/\\\\+/g, "\\");
-
-  // 🚨 [궁극의 자동 교정 로직: 뭉쳐있는 텍스트 강제 분해]
-  // 1. 단어 경계(\b) 무시하고 frac, times 등 명령어 앞에 무조건 역슬래시 추가
-  cleanText = cleanText
-    .replace(/(?<!\\)frac/g, "\\frac")
-    .replace(/(?<!\\)times/g, "\\times")
-    .replace(/(?<!\\)left/g, "\\left")
-    .replace(/(?<!\\)right/g, "\\right")
-    .replace(/(?<!\\)neq/g, "\\neq");
-
-  // 2. 중괄호가 빠지고 숫자가 뭉친 엉망진창 분수 강제 복구 (예: \frac35 -> \frac{3}{5})
-  // - 두 자리 분모인 경우 (예: \frac1825 -> \frac{18}{25})
-  cleanText = cleanText.replace(/\\frac([0-9]{1,2})([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
-  // - 한 자리 숫자들끼리 뭉친 경우 (예: \frac35 -> \frac{3}{5})
-  cleanText = cleanText.replace(/\\frac([0-9])([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
-  // - 식 형태로 뭉친 특수 케이스 (예: \frac3-05-0 -> \frac{3-0}{5-0})
-  cleanText = cleanText.replace(/\\frac([0-9]\-[0-9])([0-9]\-[0-9])/g, "\\frac{$1}{$2}");
-
-  // 3. JSON 문자열 내에서 안전하게 이중 백슬래시로 변환
-  cleanText = cleanText
-    .replace(/([^\\])\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "$1\\\\$2")
-    .replace(/^\\(frac|times|div|pm|left|right|sqrt|pi|neq)/gm, "\\\\$1");
-
+  let parsedData;
   try {
-    return JSON.parse(cleanText);
+    // 1단계: 날것 그대로 JSON 파싱 시도 (문자열 조작으로 인한 충돌 방지)
+    parsedData = JSON.parse(cleanText);
   } catch (initialError) {
     try {
-      const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
-      return JSON.parse(fixedText);
+      // 2단계: AI가 이스케이프를 빼먹어 JSON이 깨진 경우, 백슬래시를 강제로 이중화하여 복구 후 파싱
+      const fixedText = cleanText.replace(/\\/g, "\\\\");
+      parsedData = JSON.parse(fixedText);
     } catch {
       throw initialError; 
     }
   }
+
+  // 3단계: 파싱이 완료된 안전한 자바스크립트 객체 상태에서 수식(frac 등)만 정밀 타격하여 복구
+  return fixMathInObject(parsedData);
 }
 
 export async function POST(req: NextRequest) {
@@ -84,7 +101,6 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    // [프롬프트 핵심 개선] AI가 꼼수를 부리지 못하도록 강력한 금지어 설정
     const prompt = `
 당신은 대한민국 초·중등 수학 교육과정 전문 AI 홈코치이자 엄격한 수학 검수관입니다.
 첨부된 이미지를 정밀 분석하여 요청된 모드("${mode}")에 맞추어 오직 순수 JSON 형식으로만 답변하세요.
@@ -133,7 +149,7 @@ export async function POST(req: NextRequest) {
           model: modelName,
           generationConfig: {
             responseMimeType: "application/json",
-            temperature: 0.1, // 창의성(오류 가능성)을 낮추기 위해 0.1로 조정
+            temperature: 0.1,
           },
         });
 
