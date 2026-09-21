@@ -15,29 +15,32 @@ const CANDIDATE_MODELS = [
 function fixMath(str: string) {
   if (!str) return "";
   let res = str;
-  
-  // 1. 이상 기호(&)로 치환된 잘못된 텍스트 수식 복구
-  res = res.replace(/&\s*x/g, "-\\frac{3}{4}x");
-  
-  // 2. 과도한 이중 역슬래시 단일화 (\\\\frac -> \frac)
-  res = res.replace(/\\\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 3. 역슬래시가 유실된 키워드 복구 (frac -> \frac)
+  // 1. 유실되거나 오염된 & 기호 및 특수 표기 정제
+  res = res.replace(/&+/g, "");
+
+  // 2. 과도한 이중/사중 역슬래시 단일화
+  res = res.replace(/\\\\+(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
+
+  // 3. 역슬래시 유실 키워드 복구
   res = res.replace(/(?<![a-zA-Z\\])(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 4. 중괄호 없는 분수 구문 복구
+  // 4. 중괄호 없는 분수 구문 복구 (\frac34 -> \frac{3}{4})
   res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
   res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
+
+  // 5. [중요] 좌표 형태 (a, b) 가 $ 밖에 노출된 경우 $(a, b)$ 로 자동 감싸기
+  res = res.replace(/(?<!\$)\((-?\d+)\s*,\s*(-?\d+)\)(?!\$)/g, "$($1, $2)$");
 
   return res;
 }
 
 function fixMathInObject(obj: any): any {
-  if (typeof obj === 'string') {
+  if (typeof obj === "string") {
     return fixMath(obj);
   } else if (Array.isArray(obj)) {
-    return obj.map(item => fixMathInObject(item));
-  } else if (obj !== null && typeof obj === 'object') {
+    return obj.map((item) => fixMathInObject(item));
+  } else if (obj !== null && typeof obj === "object") {
     const newObj: any = {};
     for (const key in obj) {
       newObj[key] = fixMathInObject(obj[key]);
@@ -64,7 +67,7 @@ function safeJsonParse(rawText: string) {
       const fixedText = cleanText.replace(/\\/g, "\\\\");
       parsedData = JSON.parse(fixedText);
     } catch {
-      throw initialError; 
+      throw initialError;
     }
   }
 
@@ -97,7 +100,7 @@ export async function POST(req: NextRequest) {
       },
     };
 
-const prompt = `
+    const prompt = `
 당신은 대한민국 초·중등 수학 교육과정 전문 AI 홈코치이자 엄격한 수학 검수관입니다.
 첨부된 이미지를 정밀 분석하여 요청된 모드("${mode}")에 맞추어 오직 순수 JSON 형식으로만 답변하세요. 다른 설명이나 마크다운 백틱(\`\`\`json)은 절대로 포함하지 마세요.
 
@@ -129,15 +132,16 @@ const prompt = `
 ==================================================
 [수식 및 LaTeX 작성 원칙 - $ 감싸기 및 이중 이스케이프 필수]
 ==================================================
-1. [가장 중요] 정답(correct_answer), 풀이(solution_steps), 지문 등 **모든 수식 기호/분수 표현은 반드시 달러 기호($...$)로 감싸서 작성**하세요.
-   - ❌ 잘못된 예: "correct_answer": "\\\\frac{3}{4}" (달러 기호가 없으면 화면 렌더링 실패)
-   - ⭕ 올바른 예: "correct_answer": "$\\\\frac{3}{4}$"
+1. [가장 중요] 정답(correct_answer), 풀이(solution_steps), 지문 등 **모든 수식 기호/분수/좌표 표현은 반드시 각각 달러 기호($...$)로 완전히 감싸서 작성**하세요.
+   - ❌ 잘못된 예: "점 $(4, -3)을 지납니다" (닫는 달러 기호 유실)
+   - ⭕ 올바른 예: "점 $(4, -3)$을 지납니다"
+   - ⭕ 올바른 예: "$y = -\\\\frac{3}{4}x$"
 
 2. 분수를 작성할 때 역슬래시와 중괄호를 생략하지 마세요. (JSON 이스케이프 준수)
    - ⭕ 올바른 예: "$\\\\frac{3}{4}$", "$y = -\\\\frac{6}{5}x$"
 
 3. 곱셈 기호는 "times"가 아니라 반드시 "\\\\times" 로 작성하세요.
-   - ⭕ 올바른 예: "$24a = 18 \\\\times 2$"
+   - ⭕ 올바른 예: "$y = -\\\\frac{3}{4} \\\\times 4 = -3$"
 
 ==================================================
 [줄바꿈 및 보기 가독성 가이드]
