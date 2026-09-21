@@ -1,4 +1,3 @@
-// app/page.tsx
 "use client";
 
 import { useState, useEffect, useRef, ChangeEvent } from "react";
@@ -39,7 +38,7 @@ interface HistoryRecord {
   summaryTitle: string;
 }
 
-// 탭 타입에 "settings" 추가
+// 탭 타입
 type TabType = "camera" | "result" | "history" | "settings";
 
 const GRADE_LOADING_STEPS = [
@@ -71,6 +70,7 @@ async function compressImage(file: File): Promise<Blob> {
     const img = new Image();
     img.src = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(img.src);
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
       if (!ctx) {
@@ -111,7 +111,10 @@ async function compressImage(file: File): Promise<Blob> {
         0.9
       );
     };
-    img.onerror = () => reject(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(file);
+    };
   });
 }
 
@@ -142,11 +145,11 @@ export default function MathCoachPage() {
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
+  cardRefs.current = [];
 
   const currentLoadingSteps =
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
 
-  // 로컬 스토리지에서 기록 및 설정 불러오기
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -154,11 +157,10 @@ export default function MathCoachPage() {
         setHistoryList(JSON.parse(saved));
       }
 
-      // 폰트 스케일 및 다크모드 초기값 동기화
       const savedScale = localStorage.getItem("font_scale");
       if (savedScale) {
         setFontScale(savedScale);
-        document.documentElement.style.setProperty("--font-scale", savedScale); // 이 줄을 추가해주세요
+        document.documentElement.style.setProperty("--font-scale", savedScale);
       }
       const dark = document.documentElement.classList.contains("dark");
       setIsDarkMode(dark);
@@ -167,7 +169,6 @@ export default function MathCoachPage() {
     }
   }, []);
 
-  // 로딩 단계 텍스트 롤링
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (loading) {
@@ -179,7 +180,6 @@ export default function MathCoachPage() {
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
 
-  // 화면 크기 체크
   useEffect(() => {
     const checkDesktop = () => {
       setIsDesktop(window.innerWidth >= 768 && window.innerHeight >= 600);
@@ -189,7 +189,6 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
-  // 스크롤 이벤트 감지
   useEffect(() => {
     const handleScroll = () => {
       if (isDesktop) {
@@ -218,7 +217,6 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isDesktop]);
 
-  // 실시간 다크모드 토글 함수
   const toggleDarkMode = () => {
     const nextDark = !isDarkMode;
     setIsDarkMode(nextDark);
@@ -231,14 +229,12 @@ export default function MathCoachPage() {
     }
   };
 
-  // 실시간 폰트 크기 변경 함수
   const changeFontScale = (scale: string) => {
     setFontScale(scale);
     localStorage.setItem("font_scale", scale);
     document.documentElement.style.setProperty("--font-scale", scale);
   };
 
-  // 로그아웃 처리 함수
   const handleLogout = () => {
     if (confirm("로그아웃하고 화면을 잠그시겠습니까?")) {
       localStorage.removeItem("math_coach_auth");
@@ -363,11 +359,13 @@ export default function MathCoachPage() {
       setResults(parsedProblems);
       setResultMode(appliedMode);
       saveToHistory(appliedMode, parsedProblems);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("전송 에러:", err);
-      setErrorMsg(
-        err.message || "분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
-      );
+      const message =
+        err instanceof Error
+          ? err.message
+          : "분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
@@ -412,11 +410,12 @@ export default function MathCoachPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb">
-      {/* 1. 상단 네비게이션 헤더 */}
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors mobile-landscape-header">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">📐</span>
+            <span className="text-2xl" role="img" aria-label="ruler">
+              📐
+            </span>
             <span className="text-lg sm:text-xl font-extrabold text-indigo-700 dark:text-indigo-400 tracking-tight">
               초·중등 수학 홈코치 AI
             </span>
@@ -430,8 +429,8 @@ export default function MathCoachPage() {
         </div>
       </header>
 
-      {/* 2. 메인 컨텐츠 영역 */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      {/* 메인 영역 패딩 축소: 모바일 px-2 (8px), sm 이상 px-6 */}
+      <main className="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-6">
         {activeTab === "camera" && (
           <div className="space-y-4 max-w-xl mx-auto animate-fadeIn">
             <div className="bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 shadow-inner transition-colors">
@@ -469,7 +468,7 @@ export default function MathCoachPage() {
               </button>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
               <div className="mb-4">
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                   {activeMode === "grade"
@@ -519,13 +518,13 @@ export default function MathCoachPage() {
               ) : (
                 <label
                   htmlFor="camera-input"
-                  className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-8 transition-all text-center group ${
+                  className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-6 sm:p-8 transition-all text-center group ${
                     loading
                       ? "border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 cursor-not-allowed"
                       : "border-indigo-200 dark:border-indigo-900/60 cursor-pointer hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30 hover:border-indigo-400 dark:hover:border-indigo-600"
                   }`}
                 >
-                  <div className="py-8">
+                  <div className="py-6 sm:py-8">
                     <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 group-hover:scale-105 transition-transform border border-indigo-100/50 dark:border-indigo-900/50">
                       📷
                     </div>
@@ -581,9 +580,9 @@ export default function MathCoachPage() {
         )}
 
         {activeTab === "result" && (
-          <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
+          <div className="space-y-4 sm:space-y-6 max-w-2xl mx-auto animate-fadeIn">
             {loading ? (
-              <div className="bg-white dark:bg-slate-900 p-10 rounded-3xl border border-indigo-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors text-center">
+              <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl border border-indigo-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors text-center">
                 <div className="relative flex items-center justify-center w-20 h-20 mx-auto mb-4">
                   <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-950 border-t-indigo-600 dark:border-t-indigo-400 animate-spin" />
                   <span className="text-3xl animate-pulse">
@@ -602,17 +601,17 @@ export default function MathCoachPage() {
                 </p>
               </div>
             ) : results && results.length > 0 ? (
-              <div className="space-y-6" ref={reportContainerRef}>
-                <div className="flex flex-wrap items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 gap-2">
+              <div className="space-y-4 sm:space-y-6" ref={reportContainerRef}>
+                <div className="flex flex-wrap items-center justify-between pb-2 sm:pb-3 border-b border-slate-200 dark:border-slate-800 gap-2 px-1">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                       <span>
                         {resultMode === "guide"
                           ? "📖 사전 지도 가이드"
                           : "✏️ 채점 & 코칭 리포트"}
                       </span>
-                      <span className="text-indigo-600 dark:text-indigo-400 text-sm font-normal">
-                        ({results.length}개 문항)
+                      <span className="text-indigo-600 dark:text-indigo-400 text-xs sm:text-sm font-normal">
+                        ({results.length}개)
                       </span>
                     </h3>
                   </div>
@@ -620,10 +619,10 @@ export default function MathCoachPage() {
                   <div className="flex items-center gap-2">
                     {resultMode === "grade" && (
                       <div className="flex gap-1.5">
-                        <span className="text-xs bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 px-2.5 py-1 rounded-lg font-semibold border border-green-200 dark:border-green-800/60">
+                        <span className="text-xs bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-semibold border border-green-200 dark:border-green-800/60">
                           정답 {results.filter((p) => p.is_correct).length}
                         </span>
-                        <span className="text-xs bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 px-2.5 py-1 rounded-lg font-semibold border border-red-200 dark:border-red-800/60">
+                        <span className="text-xs bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-semibold border border-red-200 dark:border-red-800/60">
                           오답 {results.filter((p) => !p.is_correct).length}
                         </span>
                       </div>
@@ -633,7 +632,7 @@ export default function MathCoachPage() {
                       type="button"
                       onClick={handleShareAll}
                       disabled={exportingIdx !== null}
-                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold transition-all border border-indigo-200/80 dark:border-indigo-800/60 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-lg text-xs font-bold transition-all border border-indigo-200/80 dark:border-indigo-800/60 flex items-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <span>{exportingIdx === "all" ? "⏳" : "📤"}</span>
                       <span>{exportingIdx === "all" ? "저장 중..." : "전체 공유"}</span>
@@ -647,17 +646,18 @@ export default function MathCoachPage() {
                     ref={(el) => {
                       cardRefs.current[idx] = el;
                     }}
-                    className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                    /* 카드의 좌우 여백 패딩을 모바일 p-3.5, 테블릿 이상 p-6으로 조정 */
+                    className="bg-white dark:bg-slate-900 p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-3 sm:space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
                   >
-                    <div className="space-y-2.5 pb-1 border-b border-slate-100 dark:border-slate-800/60">
+                    <div className="space-y-2 pb-1 border-b border-slate-100 dark:border-slate-800/60">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg font-extrabold text-slate-900 dark:text-white shrink-0">
+                          <span className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white shrink-0">
                             {prob.problem_number || `${idx + 1}번`}
                           </span>
                           {resultMode === "grade" && (
                             <span
-                              className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap shrink-0 ${
+                              className={`text-[11px] sm:text-xs font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full whitespace-nowrap shrink-0 ${
                                 prob.is_correct
                                   ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200/60 dark:border-green-800/40"
                                   : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40"
@@ -672,7 +672,7 @@ export default function MathCoachPage() {
                           type="button"
                           onClick={() => handleShareCard(idx)}
                           disabled={exportingIdx !== null}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1.5 border border-slate-200/80 dark:border-slate-700 cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
+                          className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition-colors flex items-center gap-1 border border-slate-200/80 dark:border-slate-700 cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
                         >
                           <span>{exportingIdx === idx ? "⏳" : "📤"}</span>
                           <span>{exportingIdx === idx ? "저장 중..." : "공유/저장"}</span>
@@ -681,36 +681,36 @@ export default function MathCoachPage() {
 
                       {prob.concept && (
                         <div className="flex flex-wrap items-center">
-                          <span className="text-xs bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 px-2.5 py-1 rounded-lg font-medium leading-relaxed">
+                          <span className="text-[11px] sm:text-xs bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-medium leading-relaxed">
                             {prob.concept}
                           </span>
                         </div>
                       )}
                     </div>
 
-                    <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans font-medium">
+                    <div className="bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800 text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans font-medium">
                       <MathText content={prob.problem_text} />
                     </div>
 
                     {resultMode === "guide" ? (
                       <div className="space-y-3">
-                        <div className="bg-indigo-50/60 dark:bg-indigo-950/40 p-3.5 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
+                        <div className="bg-indigo-50/60 dark:bg-indigo-950/40 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
                           <span className="text-xs font-medium text-indigo-900 dark:text-indigo-200">
                             이 문제의 정답
                           </span>
-                          <span className="text-base font-extrabold text-indigo-700 dark:text-indigo-300">
+                          <span className="text-sm sm:text-base font-extrabold text-indigo-700 dark:text-indigo-300">
                             <MathText content={prob.correct_answer} />
                           </span>
                         </div>
 
                         {prob.solution_steps && prob.solution_steps.length > 0 && (
-                          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 text-sm">
+                          <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200/70 dark:border-slate-800 text-xs sm:text-sm">
                             <span className="font-bold text-slate-800 dark:text-slate-200 block mb-2">
                               📌 단계별 정석 풀이법
                             </span>
-                            <ul className="space-y-2 text-slate-700 dark:text-slate-300">
+                            <ul className="space-y-1.5 sm:space-y-2 text-slate-700 dark:text-slate-300">
                               {prob.solution_steps.map((step, sIdx) => (
-                                <li key={sIdx} className="flex items-start gap-2 leading-relaxed">
+                                <li key={sIdx} className="flex items-start gap-1.5 sm:gap-2 leading-relaxed">
                                   <span className="text-indigo-600 dark:text-indigo-400 font-bold shrink-0 mt-0.5">•</span>
                                   <span className="flex-1">
                                     <MathText content={step} />
@@ -722,8 +722,8 @@ export default function MathCoachPage() {
                         )}
 
                         {prob.teaching_tip && (
-                          <div className="bg-amber-50/80 dark:bg-amber-950/30 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50 text-sm">
-                            <span className="font-bold text-amber-950 dark:text-amber-200 block mb-1.5 flex items-center gap-1.5">
+                          <div className="bg-amber-50/80 dark:bg-amber-950/30 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-900/50 text-xs sm:text-sm">
+                            <span className="font-bold text-amber-950 dark:text-amber-200 mb-1.5 flex items-center gap-1.5">
                               <span>💡</span> 아이 지도 시 함정 포인트 & 팁
                             </span>
                             <div className="text-amber-900 dark:text-amber-300 leading-relaxed font-medium">
@@ -734,29 +734,29 @@ export default function MathCoachPage() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
-                            <span className="text-xs text-slate-400 dark:text-slate-500 block mb-0.5">아이의 답</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-200 text-base">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
+                          <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
+                            <span className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 block mb-0.5">아이의 답</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 text-sm sm:text-base">
                               <MathText content={prob.student_answer || ""} />
                             </span>
                           </div>
-                          <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-                            <span className="text-xs text-indigo-400 dark:text-indigo-300 block mb-0.5">실제 정답</span>
-                            <span className="font-bold text-indigo-700 dark:text-indigo-300 text-base">
+                          <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-2.5 sm:p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                            <span className="text-[11px] sm:text-xs text-indigo-400 dark:text-indigo-300 block mb-0.5">실제 정답</span>
+                            <span className="font-bold text-indigo-700 dark:text-indigo-300 text-sm sm:text-base">
                               <MathText content={prob.correct_answer} />
                             </span>
                           </div>
                         </div>
 
                         {prob.solution_steps && prob.solution_steps.length > 0 && (
-                          <div className="bg-indigo-50/40 dark:bg-indigo-950/30 p-4 rounded-2xl border border-indigo-100/80 dark:border-indigo-900/40 text-sm">
-                            <span className="font-bold text-indigo-950 dark:text-indigo-200 block mb-2 flex items-center gap-1.5">
+                          <div className="bg-indigo-50/40 dark:bg-indigo-950/30 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-indigo-100/80 dark:border-indigo-900/40 text-xs sm:text-sm">
+                            <span className="font-bold text-indigo-950 dark:text-indigo-200 mb-2 flex items-center gap-1.5">
                               <span>💡</span> 정답 도출 과정
                             </span>
-                            <ul className="space-y-2 text-slate-700 dark:text-slate-300">
+                            <ul className="space-y-1.5 sm:space-y-2 text-slate-700 dark:text-slate-300">
                               {prob.solution_steps.map((step, sIdx) => (
-                                <li key={sIdx} className="flex items-start gap-2 leading-relaxed">
+                                <li key={sIdx} className="flex items-start gap-1.5 sm:gap-2 leading-relaxed">
                                   <span className="text-indigo-600 dark:text-indigo-400 font-bold shrink-0 mt-0.5">•</span>
                                   <span className="flex-1">
                                     <MathText content={step} />
@@ -768,23 +768,23 @@ export default function MathCoachPage() {
                         )}
 
                         {prob.error_analysis && (
-                          <div className="text-sm space-y-1">
-                            <span className="font-bold text-slate-600 dark:text-slate-400 block text-xs">오개념 및 취약점 분석</span>
-                            <div className="text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                          <div className="text-xs sm:text-sm space-y-1">
+                            <span className="font-bold text-slate-600 dark:text-slate-400 block text-[11px] sm:text-xs">오개념 및 취약점 분석</span>
+                            <div className="text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
                               <MathText content={prob.error_analysis} />
                             </div>
                           </div>
                         )}
 
                         {!prob.is_correct && prob.parent_script && (
-                          <div className="bg-amber-50/80 dark:bg-amber-950/30 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50">
-                            <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 mb-2.5 flex items-center gap-1.5">
+                          <div className="bg-amber-50/80 dark:bg-amber-950/30 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-900/50">
+                            <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 mb-2 sm:mb-2.5 flex items-center gap-1.5">
                               <span>💬</span> 아이에게 이렇게 코칭해 보세요
                             </h4>
-                            <div className="space-y-2 text-sm text-amber-950 dark:text-amber-300">
+                            <div className="space-y-2 text-xs sm:text-sm text-amber-950 dark:text-amber-300">
                               {prob.parent_script.map((step, sIdx) => (
-                                <div key={sIdx} className="flex gap-2.5 items-start">
-                                  <span className="bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold w-5 h-5 flex items-center justify-center rounded-full shrink-0 text-xs mt-0.5">
+                                <div key={sIdx} className="flex gap-2 items-start">
+                                  <span className="bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center rounded-full shrink-0 text-[10px] sm:text-xs mt-0.5">
                                     {sIdx + 1}
                                   </span>
                                   <div className="leading-relaxed flex-1">
@@ -801,14 +801,14 @@ export default function MathCoachPage() {
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
                               📝 쌍둥이 확인 문제
                             </span>
-                            <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                            <div className="bg-slate-50 dark:bg-slate-800/60 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                               <MathText content={prob.twin_problem.question} />
                             </div>
                             <details className="mt-2 text-xs text-slate-400 dark:text-slate-500 cursor-pointer group">
                               <summary className="group-hover:text-indigo-600 dark:group-hover:text-indigo-400 font-medium select-none">
                                 쌍둥이 문제 정답 및 풀이 확인
                               </summary>
-                              <div className="mt-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
+                              <div className="mt-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed">
                                 <MathText content={prob.twin_problem.answer} />
                               </div>
                             </details>
@@ -820,7 +820,7 @@ export default function MathCoachPage() {
                 ))}
               </div>
             ) : (
-              <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center p-12 text-center text-slate-400 dark:text-slate-500 bg-white/50 dark:bg-slate-900/30">
+              <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center p-8 sm:p-12 text-center text-slate-400 dark:text-slate-500 bg-white/50 dark:bg-slate-900/30">
                 <span className="text-5xl mb-4">📊</span>
                 <p className="text-base font-bold text-slate-700 dark:text-slate-200">
                   아직 분석된 리포트가 없습니다
@@ -842,9 +842,9 @@ export default function MathCoachPage() {
 
         {activeTab === "history" && (
           <div className="max-w-xl mx-auto space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between pb-2">
+            <div className="flex items-center justify-between pb-2 px-1">
               <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <span>🕒</span>
                   <span>최근 코칭 기록</span>
                   <span className="text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-semibold">
@@ -883,7 +883,7 @@ export default function MathCoachPage() {
                     <div
                       key={item.id}
                       onClick={() => handleLoadHistoryItem(item)}
-                      className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 shadow-sm transition-all cursor-pointer group flex items-center justify-between gap-3"
+                      className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 shadow-sm transition-all cursor-pointer group flex items-center justify-between gap-3"
                     >
                       <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -908,7 +908,7 @@ export default function MathCoachPage() {
                           )}
                         </div>
 
-                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {item.summaryTitle}
                         </p>
 
@@ -921,6 +921,7 @@ export default function MathCoachPage() {
                         type="button"
                         onClick={(e) => handleDeleteHistoryItem(e, item.id)}
                         title="기록 삭제"
+                        aria-label="기록 삭제"
                         className="p-2 text-slate-300 hover:text-red-500 dark:text-slate-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                       >
                         🗑️
@@ -930,7 +931,7 @@ export default function MathCoachPage() {
                 })}
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-900 p-10 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
+              <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
                 <span className="text-4xl">🕒</span>
                 <h4 className="text-base font-bold text-slate-700 dark:text-slate-200">
                   저장된 분석 기록이 없습니다
@@ -943,11 +944,10 @@ export default function MathCoachPage() {
           </div>
         )}
 
-        {/* 설정 탭 컨텐츠 (자연스러운 탭 이동 화면) */}
         {activeTab === "settings" && (
           <div className="max-w-xl mx-auto space-y-6 animate-fadeIn">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <div className="px-1">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <span>⚙️</span>
                 <span>앱 환경 설정</span>
               </h3>
@@ -956,14 +956,15 @@ export default function MathCoachPage() {
               </p>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-              {/* 라이트/다크 모드 토글 */}
+            <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   🌙 다크 모드
                 </span>
                 <button
+                  type="button"
                   onClick={toggleDarkMode}
+                  aria-label="다크 모드 토글"
                   className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-300 cursor-pointer ${
                     isDarkMode ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
                   }`}
@@ -976,7 +977,6 @@ export default function MathCoachPage() {
                 </button>
               </div>
 
-              {/* 폰트 크기 조절 */}
               <div className="pb-4 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
                   본문 및 수식 글자 크기
@@ -989,6 +989,7 @@ export default function MathCoachPage() {
                   ].map((item) => (
                     <button
                       key={item.value}
+                      type="button"
                       onClick={() => changeFontScale(item.value)}
                       className={`py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                         fontScale === item.value
@@ -1002,9 +1003,9 @@ export default function MathCoachPage() {
                 </div>
               </div>
 
-              {/* 로그아웃 / 잠금 */}
               <div>
                 <button
+                  type="button"
                   onClick={handleLogout}
                   className="w-full py-3.5 text-sm font-semibold text-red-500 bg-red-50 dark:bg-red-950/30 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors cursor-pointer border border-red-100 dark:border-red-900/40"
                 >
@@ -1016,7 +1017,6 @@ export default function MathCoachPage() {
         )}
       </main>
 
-      {/* 3. 모바일 하단 탭 바 (설정 탭 포함 총 4개 버튼) */}
       <nav
         className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
           isDesktop || showBottomNav ? "translate-y-0" : "translate-y-full"
@@ -1070,7 +1070,6 @@ export default function MathCoachPage() {
             )}
           </button>
 
-          {/* 설정 탭 버튼 (탭 전환 방식으로 수정) */}
           <button
             type="button"
             onClick={() => setActiveTab("settings")}
@@ -1086,7 +1085,6 @@ export default function MathCoachPage() {
         </div>
       </nav>
 
-      {/* 4. 이미지 자르기 모달 (유지) */}
       {isCropperOpen && rawImageSrc && (
         <div className="relative z-[9999]">
           <ImageCropperModal
