@@ -30,6 +30,7 @@ interface AnalysisResponse {
   modelUsed?: string;
 }
 
+// 히스토리 항목 인터페이스
 interface HistoryRecord {
   id: string;
   timestamp: number;
@@ -127,11 +128,15 @@ export default function MathCoachPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
+  // 설정 바텀 시트 오픈 상태
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [fontScale, setFontScale] = useState<string>("1.0");
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
+  // 최근 기록(히스토리) 상태
   const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
+
+  // 하단 탭 표시 여부
   const [showBottomNav, setShowBottomNav] = useState(true);
   const [isDesktop, setIsDesktop] = useState(false);
   const lastScrollY = useRef(0);
@@ -142,6 +147,7 @@ export default function MathCoachPage() {
   const currentLoadingSteps =
     activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
 
+  // 로컬 스토리지에서 기록 및 설정 불러오기
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -149,6 +155,7 @@ export default function MathCoachPage() {
         setHistoryList(JSON.parse(saved));
       }
 
+      // 폰트 스케일 및 다크모드 초기값 동기화
       const savedScale = localStorage.getItem("font_scale");
       if (savedScale) setFontScale(savedScale);
 
@@ -159,6 +166,7 @@ export default function MathCoachPage() {
     }
   }, []);
 
+  // 로딩 단계 텍스트 롤링
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (loading) {
@@ -170,6 +178,7 @@ export default function MathCoachPage() {
     return () => clearInterval(interval);
   }, [loading, currentLoadingSteps.length]);
 
+  // 화면 크기 체크
   useEffect(() => {
     const checkDesktop = () => {
       setIsDesktop(window.innerWidth >= 768 && window.innerHeight >= 600);
@@ -179,6 +188,7 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
+  // 스크롤 이벤트 감지
   useEffect(() => {
     const handleScroll = () => {
       if (isDesktop) {
@@ -207,6 +217,7 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isDesktop]);
 
+  // 실시간 다크모드 토글 함수
   const toggleDarkMode = () => {
     const nextDark = !isDarkMode;
     setIsDarkMode(nextDark);
@@ -219,11 +230,14 @@ export default function MathCoachPage() {
     }
   };
 
+  // 실시간 폰트 크기 변경 함수
   const changeFontScale = (scale: string) => {
     setFontScale(scale);
     localStorage.setItem("font_scale", scale);
+    document.documentElement.style.setProperty("--font-scale", scale);
   };
 
+  // 로그아웃 처리 함수
   const handleLogout = () => {
     if (confirm("로그아웃하고 화면을 잠그시겠습니까?")) {
       localStorage.removeItem("math_coach_auth");
@@ -396,54 +410,21 @@ export default function MathCoachPage() {
   };
 
   return (
-    <div
-      className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb"
-      style={{ fontSize: `${Number(fontScale) * 100}%` }}
-    >
-      {/* 1. 상단 네비게이션 헤더 (모드 전환 및 로그아웃 버튼 포함) */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb">
+      {/* 1. 상단 네비게이션 헤더 */}
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors mobile-landscape-header">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-2xl">📐</span>
-            <span className="text-base sm:text-xl font-extrabold text-indigo-700 dark:text-indigo-400 tracking-tight">
+            <span className="text-lg sm:text-xl font-extrabold text-indigo-700 dark:text-indigo-400 tracking-tight">
               초·중등 수학 홈코치 AI
             </span>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* 상단 모드 전환 버튼 */}
-            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex gap-1 border border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveMode("grade");
-                  setResults(null);
-                }}
-                disabled={loading}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                  activeMode === "grade"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                ✏️ 채점
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveMode("guide");
-                  setResults(null);
-                }}
-                disabled={loading}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                  activeMode === "guide"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                📖 사전가이드
-              </button>
-            </div>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline-block">
+              수학 채점 & 학부모 지도 코칭
+            </span>
 
             <ThemeToggle />
 
@@ -464,6 +445,41 @@ export default function MathCoachPage() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
         {activeTab === "camera" && (
           <div className="space-y-4 max-w-xl mx-auto animate-fadeIn">
+            <div className="bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 shadow-inner transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMode("grade");
+                  setResults(null);
+                }}
+                disabled={loading}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  activeMode === "grade"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <span>✏️</span>
+                <span>채점 & 오답 코칭</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMode("guide");
+                  setResults(null);
+                }}
+                disabled={loading}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
+                  activeMode === "guide"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <span>📖</span>
+                <span>사전 지도 가이드</span>
+              </button>
+            </div>
+
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">
               <div className="mb-4">
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
@@ -939,7 +955,7 @@ export default function MathCoachPage() {
         )}
       </main>
 
-      {/* 3. 모바일 하단 탭 바 */}
+      {/* 3. 모바일 하단 탭 바 (설정 탭 추가: 총 4개 버튼) */}
       <nav
         className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out ios-safe-bottom ${
           isDesktop || showBottomNav ? "translate-y-0" : "translate-y-full"
@@ -993,6 +1009,7 @@ export default function MathCoachPage() {
             )}
           </button>
 
+          {/* 설정 탭 (바텀 시트 오픈) */}
           <button
             type="button"
             onClick={() => setIsSettingsOpen(true)}
@@ -1020,6 +1037,7 @@ export default function MathCoachPage() {
               </button>
             </div>
 
+            {/* 라이트/다크 모드 토글 */}
             <div className="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-800">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 🌙 다크 모드
@@ -1038,6 +1056,7 @@ export default function MathCoachPage() {
               </button>
             </div>
 
+            {/* 폰트 크기 조절 */}
             <div className="py-2 border-b border-slate-100 dark:border-slate-800 space-y-2">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
                 본문 및 수식 글자 크기
@@ -1063,6 +1082,7 @@ export default function MathCoachPage() {
               </div>
             </div>
 
+            {/* 로그아웃 / 잠금 */}
             <div className="pt-2">
               <button
                 onClick={() => {
