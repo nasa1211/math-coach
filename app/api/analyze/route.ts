@@ -13,29 +13,40 @@ const CANDIDATE_MODELS = [
   "gemini-1.5-pro",
 ];
 
+// LaTeX 수식 역슬래시(\)로 인한 JSON 파싱 에러 방어 함수
 function safeJsonParse(rawText: string) {
+  // 1. 마크다운 코드블록 제거
   let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
-  // JSON 내부에서 깨진 역슬래시 복구 (단일 \frac -> \\frac 등)
-  cleanText = cleanText
-    .replace(/([{,]\s*"[^"]+"\s*:\s*"[^"]*)\\(frac|times|div|pm|leq|geq)/g, "$1\\\\$2");
-
+  // 2. 가장 바깥쪽 { ... } 추출
   const firstBrace = cleanText.indexOf("{");
   const lastBrace = cleanText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
+  // 🚨 [핵심 해결책] JSON.parse 실행 전, LaTeX 명령어의 역슬래시를 강제로 이중화(\\)합니다.
+  // 이렇게 하면 \f 가 폼피드로, \t 가 탭 문자로 변환되는 것을 완벽하게 막을 수 있습니다.
+  cleanText = cleanText
+    .replace(/\\frac/g, "\\\\frac")
+    .replace(/\\times/g, "\\\\times")
+    .replace(/\\div/g, "\\\\div")
+    .replace(/\\pm/g, "\\\\pm")
+    .replace(/\\left/g, "\\\\left")
+    .replace(/\\right/g, "\\\\right")
+    .replace(/\\sqrt/g, "\\\\sqrt")
+    .replace(/\\pi/g, "\\\\pi");
+
   // 1차 파싱 시도
   try {
     return JSON.parse(cleanText);
   } catch (initialError) {
-    // LaTeX 역슬래시(\times, \frac 등)가 JSON에서 유효하지 않은 이스케이프로 인식될 때 이중 역슬래시로 보정
+    // 위에서 처리하지 못한 다른 역슬래시가 남아서 에러가 날 경우 2차 방어
     try {
       const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
       return JSON.parse(fixedText);
     } catch {
-      throw initialError; // 보정 후에도 실패 시 원본 에러 투척
+      throw initialError; 
     }
   }
 }
