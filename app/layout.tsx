@@ -11,8 +11,8 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5.0,
+  userScalable: true,
   viewportFit: 'cover', // 필수 통합 선언
 };
 
