@@ -156,7 +156,17 @@ export async function POST(req: NextRequest) {
         const result = await model.generateContent([prompt, imagePart]);
         const responseText = result.response.text();
 
+        // 🔍 [디버깅 로그 추가] AI가 보낸 진짜 순수 텍스트 확인
+        console.log("================ [1. AI RAW RESPONSE] ================");
+        console.log(responseText);
+        console.log("======================================================");
+
         parsedData = safeJsonParse(responseText);
+
+        // 🔍 [디버깅 로그 추가] 파서가 변환한 최종 JSON 구조 확인
+        console.log("================ [2. PARSED DATA] ================");
+        console.log(JSON.stringify(parsedData, null, 2));
+        console.log("==================================================");
         break;
       } catch (err: any) {
         lastError = err;
