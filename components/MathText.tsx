@@ -13,13 +13,15 @@ interface MathTextProps {
 export default function MathText({ content, className = "" }: MathTextProps) {
   if (!content) return null;
 
-// 1. JSON/문자열 처리 과정에서 유실된 '\t'('imes') 및 '\f'('frac') 복구
+  // 1. JSON/문자열 처리 과정에서 유실되거나 제어 문자로 변환된 특수 기호 및 공백 복구
   const fixedContent = content
-    .replace(/(\d)\s*imes\s*(\d)/g, "$1 \\times $2")
+    .replace(/[\x0C]/g, "")                 // 숨겨진 폼 피드(\f) 제어 문자 제거
+    .replace(/\\\s*[\f]?\s*rac/g, "\\frac") // \ rac, \rac 등 공백이나 깨진 분수 표현 교정
+    .replace(/(\d)\s*imes\s*(\d)/g, "$1 \\times$2")
     .replace(/\bimes\b/g, "\\times")
-    .replace(/\bfrac\b/g, "\\frac"); // <--- 이 부분을 추가해주세요!
+    .replace(/\bfrac\b/g, "\\frac");
 
-  // 2. 정규식으로 $$...$$ 및 $...$ 분리
+  // 2. 정규식으로 $$...$$ (블록 수식) 및 $...$ (인라인 수식) 분리
   const parts = fixedContent.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
 
   return (
