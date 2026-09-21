@@ -981,25 +981,35 @@ export default function MathCoachPage() {
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
                   본문 및 수식 글자 크기
                 </span>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: "기본 (100%)", value: "1.0" },
-                    { label: "크게 (115%)", value: "1.15" },
-                    { label: "매우 크게 (130%)", value: "1.3" },
-                  ].map((item) => (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => changeFontScale(item.value)}
-                      className={`py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                        fontScale === item.value
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
+                <div className="space-y-2">
+                  {/* 상단 레이블 및 현재 비율 표시 */}
+                  <div className="flex justify-between items-center text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span>글자 크기 조절</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-bold">
+                      {Math.round(parseFloat(fontScale) * 100)}%
+                    </span>
+                  </div>
+
+                  {/* 슬라이더 트랙 */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400 font-medium">가</span>
+                    <input
+                      type="range"
+                      min="1.0"
+                      max="2.0"
+                      step="0.05"
+                      value={fontScale}
+                      onChange={(e) => changeFontScale(e.target.value)}
+                      className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    />
+                    <span className="text-base font-bold text-slate-600 dark:text-slate-300">가</span>
+                  </div>
+
+                  {/* 하단 가이드 텍스트 (선택사항) */}
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>기본 (100%)</span>
+                    <span>최대 (200%)</span>
+                  </div>
                 </div>
               </div>
 
