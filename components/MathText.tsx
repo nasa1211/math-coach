@@ -13,64 +13,65 @@ interface MathTextProps {
 export default function MathText({ content, className = "" }: MathTextProps) {
   if (!content) return null;
 
-  // 1. JSON/문자열 처리 과정에서 유실되거나 제어 문자로 변환된 특수 기호 및 공백 복구
+  // 1. JSON/문자열 처리 과정에서 유실된 제어 문자 및 공백 복구
   const fixedContent = content
-    .replace(/[\x0C]/g, "")                 // 숨겨진 폼 피드(\f) 제어 문자 제거
-    .replace(/\\\s*[\f]?\s*rac/g, "\\frac") // \ rac, \rac 등 공백이나 깨진 분수 표현 교정
+    .replace(/[\x0C]/g, "")                 
+    .replace(/\\\s*[\f]?\s*rac/g, "\\frac") 
     .replace(/(\d)\s*imes\s*(\d)/g, "$1 \\times$2")
     .replace(/\bimes\b/g, "\\times")
     .replace(/\bfrac\b/g, "\\frac");
 
-  // 2. 정규식으로 $$...$$ (블록 수식) 및 $...$ (인라인 수식) 분리
-  const parts = fixedContent.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
+  // 2. 줄바꿈 기준로 먼저 쪼갠 뒤 각각 수식 파싱 수행 (문장이 찢어지는 현상 원천 차단)
+  const lines = fixedContent.split("\n");
 
   return (
-    <span 
-      className={`inline-block max-w-full overflow-x-auto align-middle ${className}`}
-      style={{
-        touchAction: "pan-x pan-y pinch-zoom",
-        WebkitOverflowScrolling: "touch",
-      }}
-    >
-      {parts.map((part, index) => {
-        // 블록 수식으로 들어오더라도 문장이 끊기지 않도록 displayMode: false로 인라인처럼 안전 처리
-        if (part.startsWith("$$") && part.endsWith("$$")) {
-          const math = part.slice(2, -2).trim();
-          try {
-            const html = katex.renderToString(math, {
-              displayMode: false,
-              throwOnError: false,
-            });
-            return (
-              <span
-                key={index}
-                className="inline-block mx-0.5 align-baseline"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch {
-            return <span key={index}>{part}</span>;
-          }
-        } else if (part.startsWith("$") && part.endsWith("$")) {
-          const math = part.slice(1, -1).trim();
-          try {
-            const html = katex.renderToString(math, {
-              displayMode: false,
-              throwOnError: false,
-            });
-            return (
-              <span
-                key={index}
-                className="inline-block align-baseline mx-0.5"
-                dangerouslySetInnerHTML={{ __html: html }}
-              />
-            );
-          } catch {
-            return <span key={index}>{part}</span>;
-          }
-        }
+    <span className={`block w-full space-y-1 ${className}`}>
+      {lines.map((line, lineIndex) => {
+        const parts = line.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
 
-        return <span key={index}>{part}</span>;
+        return (
+          <span key={lineIndex} className="block">
+            {parts.map((part, index) => {
+              if (part.startsWith("$$") && part.endsWith("$$")) {
+                const math = part.slice(2, -2).trim();
+                try {
+                  const html = katex.renderToString(math, {
+                    displayMode: false,
+                    throwOnError: false,
+                  });
+                  return (
+                    <span
+                      key={index}
+                      className="inline-block mx-1 align-baseline"
+                      dangerouslySetInnerHTML={{ __html: html }}
+                    />
+                  );
+                } catch {
+                  return <span key={index}>{part}</span>;
+                }
+              } else if (part.startsWith("$") && part.endsWith("$")) {
+                const math = part.slice(1, -1).trim();
+                try {
+                  const html = katex.renderToString(math, {
+                    displayMode: false,
+                    throwOnError: false,
+                  });
+                  return (
+                    <span
+                      key={index}
+                      className="inline-block mx-0.5 align-baseline"
+                      dangerouslySetInnerHTML={{ __html: html }}
+                    />
+                  );
+                } catch {
+                  return <span key={index}>{part}</span>;
+                }
+              }
+
+              return <span key={index}>{part}</span>;
+            })}
+          </span>
+        );
       })}
     </span>
   );
