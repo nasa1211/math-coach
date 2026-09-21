@@ -24,24 +24,24 @@ function safeJsonParse(rawText: string) {
   // 0. 역슬래시 중첩 정리
   cleanText = cleanText.replace(/\\\\+/g, "\\");
 
-  // 1. frac 형태 복구 (\가 빠졌거나 공백이 낀 경우)
+  // 🚨 [궁극의 자동 교정 로직: 뭉쳐있는 텍스트 강제 분해]
+  // 1. 단어 경계(\b) 무시하고 frac, times 등 명령어 앞에 무조건 역슬래시 추가
   cleanText = cleanText
-    .replace(/[\x0C]/g, "")
-    .replace(/\\?\s*[\f]?\s*rac\b/g, "\\frac")
-    .replace(/(?<!\\)\bfrac\b/g, "\\frac");
+    .replace(/(?<!\\)frac/g, "\\frac")
+    .replace(/(?<!\\)times/g, "\\times")
+    .replace(/(?<!\\)left/g, "\\left")
+    .replace(/(?<!\\)right/g, "\\right")
+    .replace(/(?<!\\)neq/g, "\\neq");
 
-  // 2. ⭐️ [핵심 개선] 한 자리 및 두 자리 이상의 숫자 분수에도 중괄호 자동 복구 (예: \frac1825 -> \frac{18}{25}, \frac35 -> \frac{3}{5})
-  // 분자와 분모의 자릿수를 유연하게 탐지하도록 개선
-  cleanText = cleanText.replace(/\\frac\s*([0-9]+)\s*([0-9]+)/g, "\\frac{$1}{$2}");
+  // 2. 중괄호가 빠지고 숫자가 뭉친 엉망진창 분수 강제 복구 (예: \frac35 -> \frac{3}{5})
+  // - 두 자리 분모인 경우 (예: \frac1825 -> \frac{18}{25})
+  cleanText = cleanText.replace(/\\frac([0-9]{1,2})([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
+  // - 한 자리 숫자들끼리 뭉친 경우 (예: \frac35 -> \frac{3}{5})
+  cleanText = cleanText.replace(/\\frac([0-9])([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
+  // - 식 형태로 뭉친 특수 케이스 (예: \frac3-05-0 -> \frac{3-0}{5-0})
+  cleanText = cleanText.replace(/\\frac([0-9]\-[0-9])([0-9]\-[0-9])/g, "\\frac{$1}{$2}");
 
-  // 3. 주요 연산자 앞 역슬래시 보장
-  cleanText = cleanText
-    .replace(/(?<!\\)\btimes\b/g, "\\times")
-    .replace(/(?<!\\)\bleft\b/g, "\\left")
-    .replace(/(?<!\\)\bright\b/g, "\\right")
-    .replace(/(?<!\\)\bneq\b/g, "\\neq");
-
-  // 4. JSON 문자열 내에서 안전하게 이중 백슬래시로 변환
+  // 3. JSON 문자열 내에서 안전하게 이중 백슬래시로 변환
   cleanText = cleanText
     .replace(/([^\\])\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "$1\\\\$2")
     .replace(/^\\(frac|times|div|pm|left|right|sqrt|pi|neq)/gm, "\\\\$1");
@@ -84,51 +84,38 @@ export async function POST(req: NextRequest) {
       },
     };
 
+    // [프롬프트 핵심 개선] AI가 꼼수를 부리지 못하도록 강력한 금지어 설정
     const prompt = `
 당신은 대한민국 초·중등 수학 교육과정 전문 AI 홈코치이자 엄격한 수학 검수관입니다.
 첨부된 이미지를 정밀 분석하여 요청된 모드("${mode}")에 맞추어 오직 순수 JSON 형식으로만 답변하세요.
 
-[수학 기호 판독 및 엄격한 검산 규칙]:
-1. 거듭제곱의 지수(예: 2³, 3ᵃ, x²)를 일반 정수(23, 3a)로 오인하지 않도록 글자 크기와 높이를 주의 깊게 확인하세요.
-2. 곱셈 기호(×), 덧셈(+), 마이너스(-), 소수점(.), 쉼표(,)를 명확하게 구분하세요.
-3. [필수] 객관식 보기 및 수식 검증: 문제에 포함된 보기(①, ②, ③, ④, ⑤ 등)나 등식의 참/거짓을 판별할 때, 각 등식의 좌변과 우변을 실제로 엄밀하게 계산하여 수학적으로 완전히 일치하는지 철저히 검산하세요. 
-4. 아이의 손글씨 답안을 먼저 정확하게 읽고, 교재 인쇄본 문제의 조건과 단계별로 대조하여 정오답을 판정하세요.
-
-[수식 표기 필수 규칙]:
-1. 수식($...$) 안에는 오직 수학 기호, 숫자, 변수만 넣으세요. 절대 한글 설명이나 'a =', 'y =' 같은 좌변 이름을 수식($) 안에 함께 넣지 마세요.
-   - 올바른 예시: "기울기는 $\\frac{3}{5}$ 입니다." 또는 "식은 $y = \\frac{3}{5}x$ 입니다."
-2. 모든 수학 수식은 반드시 인라인 LaTeX 형식인 단일 달러 기호($...$)로만 작성하고, 절대 전체 문장을 블록 수식으로 감싸지 마세요.
-3. 분수는 반드시 중괄호가 포함된 \\frac{분자}{분모} 형태로만 작성하세요. (예: $\\frac{3}{5}$)
-4. JSON 문자열 내부에서 역슬래시는 반드시 이중 백슬래시(\\\\frac, \\\\times)로 작성되도록 하세요.
+[수식 표기 절대 원칙 - 반드시 지킬 것]:
+1. [가장 중요] 분수를 작성할 때 절대 "frac35", "frac1825" 처럼 역슬래시(\\)와 중괄호({})를 생략하지 마세요!
+   - ❌ 잘못된 예: y = frac35x, -frac65, frac1825
+   - ⭕ 올바른 예: y = \\\\frac{3}{5}x, -\\\\frac{6}{5}, \\\\frac{18}{25}
+2. 수식($...$) 안에는 오직 수학 기호, 숫자, 변수만 넣으세요.
+3. 곱셈 기호 역시 "times"가 아니라 반드시 "\\\\times" 로 작성하세요.
 
 [수식 줄바꿈 및 결합 엄격 규칙]:
-1. 등식이 포함된 수식은 절대 좌변($y =$)과 우변을 쪼개서 작성하지 마세요. 반드시 하나의 달러 기호 안에 좌변, 등호, 우변을 모두 함께 넣어야 합니다.
-2. **[매우 중요] 보기 대입 풀이(①, ②, ③ 등)를 작성할 때, 절대 대입식($x = ...$)을 길게 늘여서 쪼개 쓰지 마세요.** 마이너스(-) 기호나 분수가 줄바꿈되면 안 됩니다.
-   - 올바른 예시: "① $x = -15$ 대입: $y = \\frac{3}{5} \\times (-15) = -9$ (성립하지 않음)"
-   - 올바른 예시: "② $x = -\\frac{6}{5}$ 대입: $y = \\frac{3}{5} \\times \\left(-\\frac{6}{5}\\right) = -\\frac{18}{25}$ (성립하지 않음)"
-3. 각 보기의 풀이는 반드시 **한 줄(Single Line)** 안에 모두 들어가도록 수식을 간결하게 구성하고, 절대 줄바꿈 문자를 수식 중간에 넣지 마세요.
+1. 등식이 포함된 수식은 절대 좌변($y =$)과 우변을 쪼개지 말고 하나의 수식 기호 안에 넣으세요.
+2. 보기 대입 풀이 시 줄바꿈 없이 하나의 식으로 작성하세요.
+   - 올바른 예시: "① $x = -15$ 대입: $y = \\\\frac{3}{5} \\\\times (-15) = -9$ (성립하지 않음)"
+   - 올바른 예시: "② $x = -\\\\frac{6}{5}$ 대입: $y = \\\\frac{3}{5} \\\\times \\\\left(-\\\\frac{6}{5}\\\\right) = -\\\\frac{18}{25}$ (성립하지 않음)"
 
 [JSON 반환 스키마]:
 {
   "mode": "${mode}",
   "problems": [
     {
-      "problem_number": "문항 번호 (예: 1번)",
-      "problem_text": "문제 지문 요약",
+      "problem_number": "문항 번호",
+      "problem_text": "지문 요약",
       "correct_answer": "정답",
       "solution_steps": ["1단계 풀이", "2단계 풀이"],
-      "concept": "단원 및 핵심 개념",
+      "concept": "단원 개념",
       ${
         mode === "guide"
-          ? `"teaching_tip": "학부모를 위한 지도 팁 및 함정"`
-          : `"student_answer": "아이가 작성한 답안",
-             "is_correct": true,
-             "error_analysis": "오답 원인 분석",
-             "parent_script": ["아이 코칭 대화 1단계", "2단계"],
-             "twin_problem": {
-               "question": "쌍둥이 확인 문제",
-               "answer": "쌍둥이 문제 정답 및 해설"
-             }`
+          ? `"teaching_tip": "지도 팁"`
+          : `"student_answer": "답안", "is_correct": true, "error_analysis": "원인 분석", "parent_script": ["대화 1", "대화 2"], "twin_problem": {"question": "문제", "answer": "해설"}`
       }
     }
   ]
@@ -146,7 +133,7 @@ export async function POST(req: NextRequest) {
           model: modelName,
           generationConfig: {
             responseMimeType: "application/json",
-            temperature: 0.2,
+            temperature: 0.1, // 창의성(오류 가능성)을 낮추기 위해 0.1로 조정
           },
         });
 
@@ -154,32 +141,18 @@ export async function POST(req: NextRequest) {
         const responseText = result.response.text();
 
         parsedData = safeJsonParse(responseText);
-
-        console.log(`[AI 분석 성공] 사용된 모델: ${modelName}`);
         break;
       } catch (err: any) {
-        console.warn(`[AI 분석 실패 - 모델: ${modelName}]`, err?.message || err);
         lastError = err;
       }
     }
 
     if (!parsedData) {
-      console.error("[모든 모델 분석 실패]", lastError);
-      return NextResponse.json(
-        {
-          error: "일시적으로 모든 AI 서버의 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.",
-          details: lastError?.message,
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "분석 실패", details: lastError?.message }, { status: 500 });
     }
 
     return NextResponse.json(parsedData);
   } catch (error: any) {
-    console.error("서버 처리 에러:", error);
-    return NextResponse.json(
-      { error: error?.message || "서버 내부 오류가 발생했습니다." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error?.message }, { status: 500 });
   }
 }
