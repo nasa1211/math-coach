@@ -11,7 +11,8 @@ interface MathTextProps {
 }
 
 /**
- * AI 응답에서 훼손되거나 역슬래시/중괄호가 누락된 LaTeX 수식을 정밀 복구하는 함수
+ * AI 응답에서 훼손되거나 역슬래시/중괄호가 누락된 LaTeX 수식을 정밀 복구하고,
+ * 한 줄로 뭉쳐진 보기 기호(①~⑩) 앞에 자동으로 줄바꿈을 삽입하는 함수
  */
 function fixMathExpression(str: string): string {
   if (!str) return "";
@@ -21,34 +22,20 @@ function fixMathExpression(str: string): string {
   // 1. 유실된 제어 문자(Form Feed \x0C 등) 제거
   res = res.replace(/[\x0C]/g, "");
 
-  // 2. 역슬래시가 빠진 LaTeX 키워드 강제 복구 (frac, times, div, pm, neq, sqrt, pi, left, right)
+  // 2. 한 줄로 뭉쳐진 보기 번호(①~⑩) 및 단계 구분어 앞에 자동 줄바꿈(\n) 강제 삽입
+  res = res.replace(/([^\n])\s*([①②③④⑤⑥⑦⑧⑨⑩])/g, "$1\n$2");
+  res = res.replace(/([^\n])\s*(\d+단계:)/g, "$1\n$2");
+
+  // 3. 역슬래시가 빠진 LaTeX 키워드 강제 복구
   res = res.replace(/(?<!\\)\b(frac|times|div|pm|neq|sqrt|pi|left|right)\b/g, "\\$1");
 
-  // 3. 중괄호 없이 숫자가 뭉친 분수 구문 완벽 복구
+  // 4. 중괄호 없이 숫자가 뭉친 분수 구문 완벽 복구
   // 예: \frac1825 -> \frac{18}{25}
   res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
   // 예: \frac35 -> \frac{3}{5}, -\frac65 -> -\frac{6}{5}
   res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
   // 예: \fracxy -> \frac{x}{y}
   res = res.replace(/\\frac\s*([a-zA-Z])\s*([a-zA-Z])/g, "\\frac{$1}{$2}");
-
-  // 4. $ 구분자 밖에 수식 키워드가 튀어나온 경우 ($...$ 범위 외 수식 자동 감싸기)
-  const parts = res.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
-  res = parts
-    .map((part) => {
-      if (
-        (part.startsWith("$") && part.endsWith("$")) ||
-        (part.startsWith("$$") && part.endsWith("$$"))
-      ) {
-        return part;
-      }
-      // $ 밖에 명확한 수식 기호가 존재하는 경우 $...$ 로 감싸기
-      return part.replace(
-        /(\\frac\{[^}]+\}\{[^}]+\}[a-zA-Z0-9_]*|\\times|\\neq|\\div|\\pm|\\sqrt\{[^}]+\})/g,
-        " $1 "
-      );
-    })
-    .join("");
 
   return res;
 }
@@ -66,13 +53,15 @@ function cleanLatexForKatex(mathStr: string): string {
 export default function MathText({ content, className = "" }: MathTextProps) {
   if (!content) return null;
 
-  // 수식 복구 전처리 수행
+  // 수식 복구 및 자동 줄바꿈 전처리 수행
   const fixedContent = fixMathExpression(content);
   const lines = fixedContent.split("\n");
 
   return (
-    <span className={`block w-full space-y-1 text-left ${className}`}>
+    <span className={`block w-full space-y-1.5 text-left ${className}`}>
       {lines.map((line, lineIndex) => {
+        if (!line.trim()) return null;
+
         // $$...$$ (블록 수식) 또는 $...$ (인라인 수식) 단위 분할
         const parts = line.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
 

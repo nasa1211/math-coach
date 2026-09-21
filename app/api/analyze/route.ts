@@ -12,27 +12,23 @@ const CANDIDATE_MODELS = [
   "gemini-1.5-pro",
 ];
 
-// --- [새롭게 도입된 강력한 수식 교정 엔진] ---
-// JSON 문자열을 억지로 수정하지 않고, 객체로 파싱한 후 텍스트 값만 찾아내어 안전하게 수식을 복구합니다.
+// --- [수식 교정 엔진] ---
 function fixMath(str: string) {
   let res = str;
   
-  // 0. AI가 줄바꿈(\\)으로 오작동하게 만든 과도한 역슬래시 축소 (\\frac -> \frac)
+  // 0. 과도한 역슬래시 축소 (\\frac -> \frac)
   res = res.replace(/\\\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 1. 역슬래시가 없는 명령어 강제 복구 (단어 경계 검사를 없애어 frac35, -frac65 등 글자가 뭉쳐있어도 무조건 찾아냅니다)
+  // 1. 역슬래시가 없는 키워드 강제 복구
   res = res.replace(/(?<![a-zA-Z\\])(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 2. 중괄호 없이 숫자가 뭉친 엉망진창 분수 완벽 복구
-  // 예: \frac1825 -> \frac{18}{25} (두 자리 숫자 우선 처리)
+  // 2. 중괄호 없이 숫자가 뭉친 분수 완벽 복구
   res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
-  // 예: \frac35 -> \frac{3}{5} (한 자리 숫자 처리)
   res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
 
   return res;
 }
 
-// 객체 내부를 순회하며 텍스트만 쏙쏙 뽑아 수식을 교정하는 재귀 함수
 function fixMathInObject(obj: any): any {
   if (typeof obj === 'string') {
     return fixMath(obj);
@@ -59,11 +55,9 @@ function safeJsonParse(rawText: string) {
 
   let parsedData;
   try {
-    // 1단계: 날것 그대로 JSON 파싱 시도 (문자열 조작으로 인한 충돌 방지)
     parsedData = JSON.parse(cleanText);
   } catch (initialError) {
     try {
-      // 2단계: AI가 이스케이프를 빼먹어 JSON이 깨진 경우, 백슬래시를 강제로 이중화하여 복구 후 파싱
       const fixedText = cleanText.replace(/\\/g, "\\\\");
       parsedData = JSON.parse(fixedText);
     } catch {
@@ -71,7 +65,6 @@ function safeJsonParse(rawText: string) {
     }
   }
 
-  // 3단계: 파싱이 완료된 안전한 자바스크립트 객체 상태에서 수식(frac 등)만 정밀 타격하여 복구
   return fixMathInObject(parsedData);
 }
 
@@ -112,11 +105,10 @@ export async function POST(req: NextRequest) {
 2. 수식($...$) 안에는 오직 수학 기호, 숫자, 변수만 넣으세요.
 3. 곱셈 기호 역시 "times"가 아니라 반드시 "\\\\times" 로 작성하세요.
 
-[수식 줄바꿈 및 결합 엄격 규칙]:
-1. 등식이 포함된 수식은 절대 좌변($y =$)과 우변을 쪼개지 말고 하나의 수식 기호 안에 넣으세요.
-2. 보기 대입 풀이 시 줄바꿈 없이 하나의 식으로 작성하세요.
-   - 올바른 예시: "① $x = -15$ 대입: $y = \\\\frac{3}{5} \\\\times (-15) = -9$ (성립하지 않음)"
-   - 올바른 예시: "② $x = -\\\\frac{6}{5}$ 대입: $y = \\\\frac{3}{5} \\\\times \\\\left(-\\\\frac{6}{5}\\\\right) = -\\\\frac{18}{25}$ (성립하지 않음)"
+[수식 줄바꿈 및 보기 작성 가이드]:
+1. 등식이 포함된 수식은 좌변($y =$)과 우변을 쪼개지 말고 하나의 수식 기호 안에 넣으세요.
+2. 각 보기 풀이(①, ②, ③, ④, ⑤ 또는 1단계, 2단계) 사이에는 가독성을 위해 반드시 줄바꿈(\\n)을 넣어서 분리하세요.
+   - 올바른 예시: "① $x = -15$ 대입: $y = \\\\frac{3}{5} \\\\times (-15) = -9$ (성립하지 않음)\\n② $x = -\\\\frac{6}{5}$ 대입: $y = \\\\frac{3}{5} \\\\times \\\\left(-\\\\frac{6}{5}\\\\right) = -\\\\frac{18}{25}$ (성립하지 않음)"
 
 [JSON 반환 스키마]:
 {
@@ -156,17 +148,7 @@ export async function POST(req: NextRequest) {
         const result = await model.generateContent([prompt, imagePart]);
         const responseText = result.response.text();
 
-        // 🔍 [디버깅 로그 추가] AI가 보낸 진짜 순수 텍스트 확인
-        console.log("================ [1. AI RAW RESPONSE] ================");
-        console.log(responseText);
-        console.log("======================================================");
-
         parsedData = safeJsonParse(responseText);
-
-        // 🔍 [디버깅 로그 추가] 파서가 변환한 최종 JSON 구조 확인
-        console.log("================ [2. PARSED DATA] ================");
-        console.log(JSON.stringify(parsedData, null, 2));
-        console.log("==================================================");
         break;
       } catch (err: any) {
         lastError = err;
