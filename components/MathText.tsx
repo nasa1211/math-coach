@@ -19,6 +19,9 @@ function fixMathExpression(str: string): string {
 
   let res = str;
 
+  // 추가: $ 기호 없이 \frac 이 시작하는 경우 자동으로 $...$ 로 감싸주기 (방어 로직)
+  res = res.replace(/(?<!\$)\\frac\{[^}]+\}\{[^}]+\}(?!\$)/g, "$&$");
+  
   // 1. 유실된 제어 문자(Form Feed \x0C 등) 제거
   res = res.replace(/[\x0C]/g, "");
 
