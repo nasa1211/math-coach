@@ -23,16 +23,27 @@ function safeJsonParse(rawText: string) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  // 🚨 [강력 방어 로직] LLM이 \ rac, \ frac, \   frac 등 공백을 섞어서 보낸 모든 형태를 완벽하게 \frac로 교정합니다.
+  // 🚨 [강력 자동 교정 로직]
+  // 1. 공백이나 제어문자가 낀 frac 형태를 표준 \frac로 교정
   cleanText = cleanText
-    .replace(/\\\s+rac/g, "\\frac")    // \ rac, \   rac 형태 교정
-    .replace(/\bfract?\b/g, "\\frac")   // 공백 없는 frac이나 남겨진 frac 교정 (단, 안전하게)
-    .replace(/\\frac/g, "\\\\frac");    // JSON 파싱을 위해 이중화
+    .replace(/[\x0C]/g, "")
+    .replace(/\\\s*[\f]?\s*rac/g, "\\frac")
+    .replace(/\bfract?\b/g, "\\frac");
 
-  // 기타 주요 LaTeX 기호들도 공백 유입 방어
+  // 2. 중괄호가 누락된 형태(예: \frac5x 등)를 자동으로 \frac{5}{x} 형태로 변환하는 정밀 보정
+  // 예: \frac5x -> \frac{5}{x}, \frac100x -> \frac{100}{x} 등
+  cleanText = cleanText.replace(/\\frac\s*([0-9a-zA-Z\-\+]+)\s*([0-9a-zA-Z\-\+]+)/g, "\\frac{$1}{$2}");
+
+  // 3. JSON 문자열 내에서 안전하게 이중 백슬래시(\\)로 변환
   cleanText = cleanText
-    .replace(/\\\s+times/g, "\\\\times")
-    .replace(/\\times/g, "\\\\times");
+    .replace(/\\frac/g, "\\\\frac")
+    .replace(/\\times/g, "\\\\times")
+    .replace(/\\div/g, "\\\\div")
+    .replace(/\\pm/g, "\\\\pm")
+    .replace(/\\left/g, "\\\\left")
+    .replace(/\\right/g, "\\\\right")
+    .replace(/\\sqrt/g, "\\\\sqrt")
+    .replace(/\\pi/g, "\\\\pi");
 
   // 1차 파싱 시도
   try {
@@ -87,11 +98,11 @@ const prompt = `
 [수식 표기]:
 수식은 LaTeX 문법($...$)을 적용하고, JSON 파싱 오류가 없도록 올바르게 작성하세요.
 
-[수식 표기 필수 규칙]
-- 분수, 제곱, 음수 괄호, 곱셈 기호(\times) 등 모든 수학적 수식과 식은 반드시 앞뒤에 달러 기호($)를 붙여 인라인 LaTeX 형식($...$)으로 출력하세요.
-- 올바른 예시: "$\left(-\frac{1}{28}\right) \times (-4) = +\frac{1}{7}$"
-- 잘못된 예시: "\left(-\frac{1}{28}\right) \times (-4)" (달러 기호 누락 금지)
-- 한 문장 안에 수식이 여러 개 나올 때도 각각 $ 기호로 감싸야 합니다.
+[수식 표기 필수 규칙]:
+1. 분수, 제곱, 음수 괄호, 곱셈 기호(\times) 등 모든 수학적 수식과 식은 반드시 앞뒤에 달러 기호($)를 붙여 인라인 LaTeX 형식($...$)으로 출력하세요.
+2. **[매우 중요] 분수는 반드시 중괄호가 포함된 \frac{분자}{분모} 형태로만 작성하세요.** (예: $\frac{100}{x}$, $\frac{5}{x}$, $-\frac{1}{3}x$, $\frac{3}{5}$)
+3. 절대 'frac100x'나 중괄호가 빠진 'frac5x' 같은 형태로 출력하지 마세요. 반드시 \frac{값}{값} 형식을 지켜야 합니다.
+4. JSON 문자열 내부에서 역슬래시는 반드시 이중 백슬래시(\\frac, \\times)로 작성되도록 하세요.
 
 [수식 표기 및 JSON 역슬래시 필수 규칙]:
 - LaTeX 수식을 작성할 때, 분수 등 역슬래시가 들어가는 명령어는 반드시 이중 백슬래시(\\frac, \\times 등)를 사용하여 JSON 문자열 내에서 유실되지 않도록 하세요.
