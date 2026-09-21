@@ -21,16 +21,15 @@ export default function MathText({ content, className = "" }: MathTextProps) {
     .replace(/\bimes\b/g, "\\times")
     .replace(/\bfrac\b/g, "\\frac");
 
-  // 2. 줄바꿈 기준로 먼저 쪼갠 뒤 각각 수식 파싱 수행 (문장이 찢어지는 현상 원천 차단)
   const lines = fixedContent.split("\n");
 
   return (
-    <span className={`block w-full space-y-1 ${className}`}>
+    <span className={`block w-full space-y-1 text-left ${className}`}>
       {lines.map((line, lineIndex) => {
         const parts = line.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
 
         return (
-          <span key={lineIndex} className="block">
+          <span key={lineIndex} className="block leading-relaxed">
             {parts.map((part, index) => {
               if (part.startsWith("$$") && part.endsWith("$$")) {
                 const math = part.slice(2, -2).trim();
@@ -42,7 +41,7 @@ export default function MathText({ content, className = "" }: MathTextProps) {
                   return (
                     <span
                       key={index}
-                      className="inline-block mx-1 align-baseline"
+                      className="inline mx-1"
                       dangerouslySetInnerHTML={{ __html: html }}
                     />
                   );
@@ -59,7 +58,7 @@ export default function MathText({ content, className = "" }: MathTextProps) {
                   return (
                     <span
                       key={index}
-                      className="inline-block mx-0.5 align-baseline"
+                      className="inline mx-0.5"
                       dangerouslySetInnerHTML={{ __html: html }}
                     />
                   );
