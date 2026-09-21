@@ -24,13 +24,22 @@ function safeJsonParse(rawText: string) {
   }
 
   // 🚨 [강력 자동 교정 로직]
+  // 1. 공백이나 제어문자가 낀 frac 형태 교정
   cleanText = cleanText
     .replace(/[\x0C]/g, "")
     .replace(/\\\s*[\f]?\s*rac/g, "\\frac")
     .replace(/\bfract?\b/g, "\\frac");
 
+  // 2. 중괄호가 누락된 frac 형태 보정
   cleanText = cleanText.replace(/\\frac\s*([0-9a-zA-Z\-\+]+)\s*([0-9a-zA-Z\-\+]+)/g, "\\frac{$1}{$2}");
 
+  // 3. ⭐️ [핵심] AI가 백슬래시 없이 보낸 'times', 'left', 'right' 앞에 자동으로 역슬래시 부착
+  cleanText = cleanText
+    .replace(/(?<!\\)\btimes\b/g, "\\times")
+    .replace(/(?<!\\)\bleft\b/g, "\\left")
+    .replace(/(?<!\\)\bright\b/g, "\\right");
+
+  // 4. JSON 문자열 내에서 안전하게 이중 백슬래시(\\)로 변환
   cleanText = cleanText
     .replace(/\\frac/g, "\\\\frac")
     .replace(/\\times/g, "\\\\times")
