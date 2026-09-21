@@ -13,35 +13,31 @@ const CANDIDATE_MODELS = [
   "gemini-1.5-pro",
 ];
 
-// LaTeX 수식 역슬래시(\)로 인한 JSON 파싱 에러 방어 함수
 function safeJsonParse(rawText: string) {
-  // 1. 마크다운 코드블록 제거
   let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
 
-  // 2. 가장 바깥쪽 { ... } 추출
+  // 가장 바깥쪽 { ... } 추출
   const firstBrace = cleanText.indexOf("{");
   const lastBrace = cleanText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  // 🚨 [핵심 해결책] JSON.parse 실행 전, LaTeX 명령어의 역슬래시를 강제로 이중화(\\)합니다.
-  // 이렇게 하면 \f 가 폼피드로, \t 가 탭 문자로 변환되는 것을 완벽하게 막을 수 있습니다.
+  // 🚨 [강력 방어 로직] LLM이 \ rac, \ frac, \   frac 등 공백을 섞어서 보낸 모든 형태를 완벽하게 \frac로 교정합니다.
   cleanText = cleanText
-    .replace(/\\frac/g, "\\\\frac")
-    .replace(/\\times/g, "\\\\times")
-    .replace(/\\div/g, "\\\\div")
-    .replace(/\\pm/g, "\\\\pm")
-    .replace(/\\left/g, "\\\\left")
-    .replace(/\\right/g, "\\\\right")
-    .replace(/\\sqrt/g, "\\\\sqrt")
-    .replace(/\\pi/g, "\\\\pi");
+    .replace(/\\\s+rac/g, "\\frac")    // \ rac, \   rac 형태 교정
+    .replace(/\bfract?\b/g, "\\frac")   // 공백 없는 frac이나 남겨진 frac 교정 (단, 안전하게)
+    .replace(/\\frac/g, "\\\\frac");    // JSON 파싱을 위해 이중화
+
+  // 기타 주요 LaTeX 기호들도 공백 유입 방어
+  cleanText = cleanText
+    .replace(/\\\s+times/g, "\\\\times")
+    .replace(/\\times/g, "\\\\times");
 
   // 1차 파싱 시도
   try {
     return JSON.parse(cleanText);
   } catch (initialError) {
-    // 위에서 처리하지 못한 다른 역슬래시가 남아서 에러가 날 경우 2차 방어
     try {
       const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
       return JSON.parse(fixedText);
