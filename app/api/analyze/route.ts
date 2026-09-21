@@ -25,38 +25,36 @@ function safeJsonParse(rawText: string) {
 
   // 0. AI가 역슬래시를 과도하게 중첩해서 보낸 경우 바로잡기
   cleanText = cleanText.replace(/\\\\+/g, "\\");
+
   // 🚨 [강력 자동 교정 로직]
-  // 1. 공백이나 제어문자가 낀 frac 형태 교정
+  // 1. 공백, 제어문자, 또는 역슬래시가 빠진 frac 형태를 완벽하게 \frac로 복구
   cleanText = cleanText
     .replace(/[\x0C]/g, "")
-    .replace(/\\\s*[\f]?\s*rac/g, "\\frac")
-    .replace(/\bfract?\b/g, "\\frac");
+    .replace(/\\?\s*[\f]?\s*rac\b/g, "\\frac")
+    .replace(/(?<!\\)\bfrac\b/g, "\\frac");
 
-  // 2. 중괄호가 누락된 frac 형태 보정
+  // 2. 중괄호가 누락된 frac 형태 보정 (예: \frac 3 5 -> \frac{3}{5})
   cleanText = cleanText.replace(/\\frac\s*([0-9a-zA-Z\-\+]+)\s*([0-9a-zA-Z\-\+]+)/g, "\\frac{$1}{$2}");
 
-  // 3. ⭐️ [핵심] AI가 백슬래시 없이 보낸 'times', 'left', 'right' 앞에 자동으로 역슬래시 부착
+  // 3. AI가 백슬래시 없이 보낸 명령어 앞에 자동으로 역슬래시 부착
   cleanText = cleanText
     .replace(/(?<!\\)\btimes\b/g, "\\times")
     .replace(/(?<!\\)\bleft\b/g, "\\left")
-    .replace(/(?<!\\)\bright\b/g, "\\right");
+    .replace(/(?<!\\)\bright\b/g, "\\right")
+    .replace(/(?<!\\)\bneq\b/g, "\\neq");
 
-  // 4. JSON 문자열 내에서 안전하게 이중 백슬래시(\\)로 변환
+  // 4. JSON 문자열 내에서 안전하게 이중 백슬래시(\\)로 변환 (KaTeX 및 JSON 파싱 양쪽 다 대응)
+  // 단, 이미 이중으로 되어 있는 것은 유지하고 단일 백슬래시만 안전하게 이중화
   cleanText = cleanText
-    .replace(/\\frac/g, "\\\\frac")
-    .replace(/\\times/g, "\\\\times")
-    .replace(/\\div/g, "\\\\div")
-    .replace(/\\pm/g, "\\\\pm")
-    .replace(/\\left/g, "\\\\left")
-    .replace(/\\right/g, "\\\\right")
-    .replace(/\\sqrt/g, "\\\\sqrt")
-    .replace(/\\pi/g, "\\\\pi");
+    .replace(/([^\\])\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "$1\\\\$2")
+    .replace(/^\\(frac|times|div|pm|left|right|sqrt|pi|neq)/gm, "\\\\$1");
 
   // 1차 파싱 시도
   try {
     return JSON.parse(cleanText);
   } catch (initialError) {
     try {
+      // JSON 내 특수문자 탈출 이슈가 있을 경우 보정 후 재시도
       const fixedText = cleanText.replace(/\\([a-zA-Z])/g, "\\\\$1");
       return JSON.parse(fixedText);
     } catch {
