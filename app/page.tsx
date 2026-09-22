@@ -694,15 +694,14 @@ export default function MathCoachPage() {
 
                     {resultMode === "guide" ? (
                       <div className="space-y-3">
-                        <div className="bg-indigo-50/60 dark:bg-indigo-950/40 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between">
-                          <span className="text-xs font-medium text-indigo-900 dark:text-indigo-200">
+                        <div className="bg-indigo-50/60 dark:bg-indigo-950/40 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex flex-col gap-1.5">
+                          <span className="text-xs font-semibold text-indigo-900/70 dark:text-indigo-300/70">
                             이 문제의 정답
                           </span>
-                          <span className="text-sm sm:text-base font-extrabold text-indigo-700 dark:text-indigo-300">
+                          <div className="text-sm sm:text-base font-extrabold text-indigo-700 dark:text-indigo-300 overflow-x-auto">
                             <MathText content={prob.correct_answer} />
-                          </span>
+                          </div>
                         </div>
-
                         {prob.solution_steps && prob.solution_steps.length > 0 && (
                           <div className="bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200/70 dark:border-slate-800 text-xs sm:text-sm">
                             <span className="font-bold text-slate-800 dark:text-slate-200 block mb-2">
