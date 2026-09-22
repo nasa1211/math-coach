@@ -1,89 +1,726 @@
 // app/api/analyze/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// ============================================================
+// 모델 설정
+// ============================================================
+
 const CANDIDATE_MODELS = [
-  "gemini-2.5-pro",
+  "gemini-3.8-flash",
   "gemini-3.6-flash",
+  "gemini-2.5-pro",
   "gemini-2.5-flash",
-  "gemini-3.1-flash-lite-preview",
   "gemini-2.5-flash-lite",
-  "gemini-1.5-pro",
-  "gemini-1.5-flash",
 ];
 
-// --- [수식 교정 엔진] ---
-function fixMath(str: string) {
-  if (typeof str !== "string") return str;
-  let res = str;
+// 정답 불일치 발생 시 사용할 재검증 모델
+const VERIFIER_MODELS = [
+  "gemini-2.5-pro",
+  "gemini-3.8-flash",
+];
 
-  // 1. 역슬래시가 없는 키워드 보정 (예: frac{3}{5} -> \frac{3}{5})
-  res = res.replace(/(?<![a-zA-Z\\])(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
+// ============================================================
+// 타입
+// ============================================================
 
-  // 2. 중괄호 빠진 분수 보정
-  res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
-  res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
+type AnalyzeMode = "grade" | "guide";
 
-  return res;
+interface TwinProblem {
+  question: string;
+  answer: string;
 }
 
+interface Problem {
+  problem_number: string;
+  problem_text: string;
+
+  // 최종 정답
+  correct_answer: string;
+
+  // 풀이
+  solution_steps: string[];
+
+  concept: string;
+
+  // AI가 풀이 마지막에서 실제로 구한 값
+  // 서버의 정답-풀이 일치 검증용
+  final_answer?: string;
+
+  // grade 모드
+  student_answer?: string;
+  is_correct?: boolean;
+  error_analysis?: string;
+  parent_script?: string[];
+  twin_problem?: TwinProblem;
+
+  // guide 모드
+  teaching_tip?: string;
+}
+
+interface AnalyzeResponse {
+  mode: AnalyzeMode;
+  problems: Problem[];
+}
+
+// ============================================================
+// 수식 보정
+// ============================================================
+
+function fixMath(str: string): string {
+  if (typeof str !== "string") return str;
+
+  // 일반 문장 전체를 무작정 수정하지 않고
+  // $...$ 내부의 수식만 보정합니다.
+  return str.replace(/\$([^$]*)\$/g, (_match, mathContent: string) => {
+    let math = mathContent;
+
+    // 역슬래시가 빠진 LaTeX 명령어
+    // 예: frac{3}{5} -> \frac{3}{5}
+    math = math.replace(
+      /(?<![a-zA-Z\\])(frac|times|div|pm|left|right|sqrt|pi|neq)/g,
+      "\\$1"
+    );
+
+    // 중괄호가 빠진 간단한 분수
+    // 예: \frac35 -> \frac{3}{5}
+    math = math.replace(
+      /\\frac\s*([0-9])\s*([0-9])(?![0-9])/g,
+      "\\frac{$1}{$2}"
+    );
+
+    // 예: \frac1825 -> \frac{18}{25}
+    // 주의: 숫자 해석이 애매한 경우가 있으므로
+    // $...$ 수식 내부에서만 제한적으로 적용합니다.
+    math = math.replace(
+      /\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g,
+      "\\frac{$1}{$2}"
+    );
+
+    return `$${math}$`;
+  });
+}
+
+// ============================================================
+// 객체 전체 수식 보정
+// ============================================================
+
 function fixMathInObject(obj: any): any {
-  if (typeof obj === 'string') {
+  if (typeof obj === "string") {
     return fixMath(obj);
-  } else if (Array.isArray(obj)) {
-    return obj.map(item => fixMathInObject(item));
-  } else if (obj !== null && typeof obj === 'object') {
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => fixMathInObject(item));
+  }
+
+  if (obj !== null && typeof obj === "object") {
     const newObj: any = {};
+
     for (const key in obj) {
       newObj[key] = fixMathInObject(obj[key]);
     }
+
     return newObj;
   }
+
   return obj;
 }
 
-function safeJsonParse(rawText: string) {
-  let cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+// ============================================================
+// JSON 파싱
+// ============================================================
+
+function safeJsonParse(rawText: string): AnalyzeResponse {
+  let cleanText = rawText
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
 
   const firstBrace = cleanText.indexOf("{");
   const lastBrace = cleanText.lastIndexOf("}");
+
   if (firstBrace !== -1 && lastBrace !== -1) {
     cleanText = cleanText.substring(firstBrace, lastBrace + 1);
   }
 
-  let parsedData;
-  try {
-    parsedData = JSON.parse(cleanText);
-  } catch (initialError) {
-    try {
-      const fixedText = cleanText.replace(/\\/g, "\\\\");
-      parsedData = JSON.parse(fixedText);
-    } catch {
-      throw initialError; 
+  // 중요:
+  // 이전 코드의
+  //
+  // cleanText.replace(/\\/g, "\\\\")
+  //
+  // 는 제거합니다.
+  //
+  // JSON 전체의 백슬래시를 강제로 바꾸면
+  // LaTeX의 \frac, \times 등이 오염될 수 있습니다.
+
+  const parsedData = JSON.parse(cleanText);
+
+  return fixMathInObject(parsedData) as AnalyzeResponse;
+}
+
+// ============================================================
+// 정답 비교용 문자열 정규화
+// ============================================================
+
+function normalizeAnswer(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  let result = String(value).trim();
+
+  // Markdown / LaTeX wrapper 제거
+  result = result
+    .replace(/^\$+/, "")
+    .replace(/\$+$/, "")
+    .trim();
+
+  // \left, \right 제거
+  result = result
+    .replace(/\\left/g, "")
+    .replace(/\\right/g, "");
+
+  // 공백 제거
+  result = result.replace(/\s+/g, "");
+
+  // Unicode minus -> 일반 minus
+  result = result.replace(/[−–—]/g, "-");
+
+  // "정답: 2", "답: 2" 형태
+  result = result.replace(
+    /^(정답|답)\s*[:：=]\s*/i,
+    ""
+  );
+
+  // 예:
+  // a=2
+  // x=10
+  //
+  // 단일 등식인 경우 오른쪽 값만 추출
+  const equalCount = (result.match(/=/g) || []).length;
+
+  if (equalCount === 1) {
+    const equalIndex = result.lastIndexOf("=");
+
+    if (equalIndex !== -1 && equalIndex < result.length - 1) {
+      result = result.substring(equalIndex + 1);
     }
   }
 
-  return fixMathInObject(parsedData);
+  // \frac{3}{5}와 frac{3}{5} 정도의 표현 차이를 줄이기 위한 처리
+  result = result.replace(
+    /\\frac\{([^{}]+)\}\{([^{}]+)\}/g,
+    "($1)/($2)"
+  );
+
+  result = result.replace(
+    /frac\{([^{}]+)\}\{([^{}]+)\}/g,
+    "($1)/($2)"
+  );
+
+  return result;
 }
+
+// ============================================================
+// 정답 ↔ 풀이 불일치 검사
+// ============================================================
+
+interface AnswerMismatch {
+  index: number;
+  correctAnswer: string;
+  finalAnswer: string;
+  normalizedCorrect: string;
+  normalizedFinal: string;
+}
+
+function findAnswerMismatches(
+  data: AnalyzeResponse
+): AnswerMismatch[] {
+  const mismatches: AnswerMismatch[] = [];
+
+  if (!Array.isArray(data.problems)) {
+    return mismatches;
+  }
+
+  data.problems.forEach((problem, index) => {
+    const correct = normalizeAnswer(problem.correct_answer);
+    const final = normalizeAnswer(problem.final_answer);
+
+    // final_answer가 없거나 서로 다르면 검증 대상으로 처리
+    if (!correct || !final || correct !== final) {
+      mismatches.push({
+        index,
+        correctAnswer: problem.correct_answer ?? "",
+        finalAnswer: problem.final_answer ?? "",
+        normalizedCorrect: correct,
+        normalizedFinal: final,
+      });
+    }
+  });
+
+  return mismatches;
+}
+
+// ============================================================
+// grade 모드의 학생 답안 재판정
+// ============================================================
+
+function recalculateGrade(problem: Problem): void {
+  if (!problem.student_answer) {
+    return;
+  }
+
+  const studentAnswer = normalizeAnswer(problem.student_answer);
+  const correctAnswer = normalizeAnswer(problem.correct_answer);
+
+  if (
+    studentAnswer === "미작성" ||
+    studentAnswer === "판독불가" ||
+    studentAnswer === ""
+  ) {
+    problem.is_correct = false;
+    return;
+  }
+
+  problem.is_correct = studentAnswer === correctAnswer;
+}
+
+// ============================================================
+// 1차 분석 프롬프트
+// ============================================================
+
+function buildMainPrompt(mode: AnalyzeMode): string {
+  return `
+당신은 대한민국 초·중등 수학 교육과정 전문 AI 홈코치이자
+엄격한 수학 검수관입니다.
+
+첨부된 이미지를 정밀 분석하여 요청된 모드("${mode}")에 맞추어
+오직 순수 JSON 형식으로만 답변하세요.
+
+==================================================
+[가장 중요한 수학 풀이 원칙]
+==================================================
+
+1. 문제의 모든 조건을 정확하게 읽으세요.
+
+2. 그래프, 좌표, 표, 그림, 식, 보기 등 이미지에 있는 정보를
+   필요한 경우 모두 활용하세요.
+
+3. 문제에서 요구하는 값을 정확하게 확인하세요.
+
+4. 절대로 문제에서 주어진 값 자체를 정답으로 착각하지 마세요.
+
+5. 풀이의 마지막 계산 결과가 실제 정답입니다.
+
+6. correct_answer는 문제를 읽은 후 추측해서 작성하지 마세요.
+
+7. 반드시 solution_steps의 계산을 끝까지 완료한 다음
+   마지막 결과를 final_answer에 작성하세요.
+
+8. correct_answer와 final_answer는 반드시 동일한 정답을 의미해야 합니다.
+
+9. 특히 다음과 같은 오류를 절대로 만들지 마세요.
+
+   문제:
+   "교점 P의 x좌표가 -2일 때 a의 값을 구하시오."
+
+   풀이:
+   x=-2
+   y=1
+   1=-a/(-2)
+   a=2
+
+   올바른 결과:
+   "final_answer": "2"
+   "correct_answer": "2"
+
+   잘못된 결과:
+   "final_answer": "2"
+   "correct_answer": "-2"
+
+10. 최종 JSON을 작성하기 직전에 반드시 스스로 검산하세요.
+
+   [검산]
+   - 문제에서 요구하는 값은 무엇인가?
+   - solution_steps의 마지막 계산 결과는 무엇인가?
+   - final_answer는 그 결과와 같은가?
+   - correct_answer는 final_answer와 같은가?
+
+==================================================
+[단계별 풀이]
+==================================================
+
+1. solution_steps에는 완성된 정석 풀이만 작성하세요.
+
+2. "잠시만요", "다시 확인하면",
+   "~라고 생각하기 쉽지만" 등의 내부 고민 과정은 쓰지 마세요.
+
+3. 계산 과정을 생략하지 마세요.
+
+4. 등식이 포함된 수식은 하나의 $...$ 안에 작성하세요.
+
+5. 보기 대입 풀이도 각각 하나의 완전한 수식으로 작성하세요.
+
+==================================================
+[학생 답안 스캔 및 채점]
+==================================================
+
+grade 모드일 경우에만 적용하세요.
+
+1. 이미지 내의 모든 문제를 순서대로 식별하세요.
+
+2. 인쇄된 문제지 텍스트와 학생이 직접 작성한 손글씨를
+   정확하게 구분하세요.
+
+3. 인쇄체 텍스트를 student_answer로 수집하지 마세요.
+
+4. 학생 손글씨/표시가 전혀 없는 경우:
+
+   "student_answer": "미작성"
+   "is_correct": false
+   "error_analysis":
+   "문제지에 답안 표기가 없습니다. 직접 풀이 후 다시 촬영해 주세요."
+
+5. 답안이 흐리거나 가려져 판독할 수 없는 경우:
+
+   "student_answer": "판독불가"
+   "is_correct": false
+
+6. 학생의 명확한 답안이 존재하는 경우에만
+   correct_answer와 비교하여 채점하세요.
+
+==================================================
+[해설지 / 정답지 판별]
+==================================================
+
+이미지가 학생 문제지가 아니라 해설지 또는 정답지인 경우:
+
+"student_answer": "미작성"
+"is_correct": false
+"error_analysis":
+"해설지 이미지가 감지되었습니다. 학생이 풀이한 문제지 이미지를 다시 올려주세요."
+
+==================================================
+[중등 수학 기하/그래프 문제]
+==================================================
+
+1. 그래프의 개형과 좌표 조건을 정확하게 읽으세요.
+
+2. 교점 문제에서는 교점이 두 그래프의 식을 동시에 만족한다는 점을
+   반드시 이용하세요.
+
+3. 문제에서 특정 점의 x좌표 또는 y좌표가 주어진 경우,
+   그 값이 최종 정답인지 문제에서 추가로 구해야 하는 값인지
+   정확하게 구분하세요.
+
+4. "x좌표가 -2일 때 a의 값을 구하시오"와 같은 문제에서는
+   -2를 정답으로 그대로 출력하지 말고,
+   실제로 구해야 하는 a를 계산하세요.
+
+==================================================
+[수식 및 LaTeX]
+==================================================
+
+1. 모든 수식은 반드시 $...$로 감싸세요.
+
+2. 분수는 반드시 다음처럼 작성하세요.
+
+   "$\\\\frac{3}{5}$"
+
+3. 다음처럼 작성하지 마세요.
+
+   "frac35"
+   "frac{3}{5}"
+
+4. 곱셈 기호는 반드시 "\\\\times"를 사용하세요.
+
+5. 올바른 예:
+
+   "$y = -\\\\frac{1}{2} \\\\times (-2) = 1$"
+
+==================================================
+[필드 의미]
+==================================================
+
+final_answer:
+- solution_steps의 마지막 계산 결과
+- 문제에서 실제로 요구하는 값
+- 정답 검증용 필드
+
+correct_answer:
+- final_answer와 동일한 실제 정답
+- final_answer와 다른 값을 절대로 작성하지 마세요.
+
+==================================================
+`;
+}
+
+// ============================================================
+// 재검증 프롬프트
+// ============================================================
+
+function buildVerificationPrompt(
+  mode: AnalyzeMode,
+  problem: Problem
+): string {
+  return `
+당신은 수학 풀이 검증 전문 AI입니다.
+
+원본 문제 이미지와 아래의 기존 AI 분석 결과를 함께 확인하세요.
+
+중요:
+기존 AI의 correct_answer를 절대로 신뢰하지 마세요.
+반드시 원본 이미지의 문제를 다시 읽고 직접 계산하여 검증하세요.
+
+==================================================
+[기존 AI 분석]
+==================================================
+
+${JSON.stringify(problem, null, 2)}
+
+==================================================
+[검증 절차]
+==================================================
+
+1. 원본 이미지에서 문제의 요구사항을 다시 확인하세요.
+
+2. 문제에 주어진 조건을 정확하게 확인하세요.
+
+3. 기존 solution_steps의 계산을 처음부터 다시 검산하세요.
+
+4. 실제 최종 정답을 독립적으로 다시 계산하세요.
+
+5. 특히 다음 두 값을 반드시 확인하세요.
+
+   - 문제에서 실제로 구하라고 한 값
+   - 기존 AI가 답으로 사용한 값
+
+6. 문제에서 x=-2라고 주어졌더라도
+   "a의 값을 구하시오"라고 되어 있다면
+   정답은 x=-2가 아니라 계산한 a의 값입니다.
+
+7. 검증된 최종 결과를 final_answer에 작성하세요.
+
+8. correct_answer에는 final_answer와 동일한 값을 작성하세요.
+
+9. 기존 풀이가 잘못되었다면 solution_steps도 올바른 풀이로 수정하세요.
+
+==================================================
+[수식 규칙]
+==================================================
+
+모든 수식은 $...$로 감싸세요.
+
+분수는 반드시:
+"$\\\\frac{3}{5}$"
+
+형태로 작성하세요.
+
+==================================================
+[최종 검증]
+==================================================
+
+final_answer와 correct_answer가 의미상 동일해야 합니다.
+
+오류가 발견되었다면 corrected 값을 반환하세요.
+`;
+}
+
+// ============================================================
+// 재검증 결과 타입
+// ============================================================
+
+interface VerificationResult {
+  correct_answer: string;
+  final_answer: string;
+  solution_steps: string[];
+  error_analysis?: string;
+}
+
+// ============================================================
+// Gemini 분석 실행
+// ============================================================
+
+async function generateAnalysis(
+  genAI: GoogleGenerativeAI,
+  modelName: string,
+  prompt: string,
+  imagePart: any
+): Promise<AnalyzeResponse> {
+  const model = genAI.getGenerativeModel({
+    model: modelName,
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.1,
+    },
+  });
+
+  const result = await model.generateContent([
+    prompt,
+    imagePart,
+  ]);
+
+  const responseText = result.response.text();
+
+  console.log(
+    "================ [AI Raw Response] ================"
+  );
+  console.log(responseText);
+  console.log(
+    "=================================================="
+  );
+
+  return safeJsonParse(responseText);
+}
+
+// ============================================================
+// 불일치 문제 재검증
+// ============================================================
+
+async function revalidateProblem(
+  genAI: GoogleGenerativeAI,
+  imagePart: any,
+  mode: AnalyzeMode,
+  problem: Problem
+): Promise<VerificationResult | null> {
+  const prompt = buildVerificationPrompt(mode, problem);
+
+  let lastError: any = null;
+
+  for (const modelName of VERIFIER_MODELS) {
+    try {
+      console.log(
+        `[정답 재검증] 모델: ${modelName}, 문제: ${problem.problem_number}`
+      );
+
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.0,
+        },
+      });
+
+      const result = await model.generateContent([
+        prompt,
+        imagePart,
+      ]);
+
+      const responseText = result.response.text();
+
+      console.log(
+        "================ [Verifier Raw Response] ================"
+      );
+      console.log(responseText);
+      console.log(
+        "========================================================="
+      );
+
+      const parsed = safeJsonParse(responseText) as any;
+
+      if (
+        !parsed ||
+        typeof parsed.correct_answer !== "string" ||
+        typeof parsed.final_answer !== "string" ||
+        !Array.isArray(parsed.solution_steps)
+      ) {
+        throw new Error(
+          "재검증 응답에 필수 필드가 없습니다."
+        );
+      }
+
+      return {
+        correct_answer: parsed.correct_answer,
+        final_answer: parsed.final_answer,
+        solution_steps: parsed.solution_steps,
+        error_analysis: parsed.error_analysis,
+      };
+    } catch (error: any) {
+      lastError = error;
+
+      console.error(
+        `[정답 재검증 실패] ${modelName}:`,
+        error?.message
+      );
+    }
+  }
+
+  console.error(
+    "[정답 재검증 최종 실패]:",
+    lastError?.message
+  );
+
+  return null;
+}
+
+// ============================================================
+// POST
+// ============================================================
 
 export async function POST(req: NextRequest) {
   try {
+    // ----------------------------------------------------------
+    // 1. FormData
+    // ----------------------------------------------------------
+
     const formData = await req.formData();
+
     const imageFile = formData.get("image") as Blob | null;
-    const mode = (formData.get("mode") as string) || "grade";
+
+    const rawMode = formData.get("mode") as string | null;
+
+    const mode: AnalyzeMode =
+      rawMode === "guide" ? "guide" : "grade";
+
+    // ----------------------------------------------------------
+    // 2. 이미지 검사
+    // ----------------------------------------------------------
 
     if (!imageFile) {
-      return NextResponse.json({ error: "이미지가 전송되지 않았습니다." }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "이미지가 전송되지 않았습니다.",
+        },
+        {
+          status: 400,
+        }
+      );
     }
+
+    // ----------------------------------------------------------
+    // 3. API Key
+    // ----------------------------------------------------------
 
     const apiKey = process.env.GEMINI_API_KEY;
+
     if (!apiKey) {
-      return NextResponse.json({ error: "GEMINI_API_KEY 환경변수가 설정되지 않았습니다." }, { status: 500 });
+      return NextResponse.json(
+        {
+          error:
+            "GEMINI_API_KEY 환경변수가 설정되지 않았습니다.",
+        },
+        {
+          status: 500,
+        }
+      );
     }
 
+    // ----------------------------------------------------------
+    // 4. Gemini 초기화
+    // ----------------------------------------------------------
+
     const genAI = new GoogleGenerativeAI(apiKey);
+
+    // ----------------------------------------------------------
+    // 5. 이미지 변환
+    // ----------------------------------------------------------
+
     const arrayBuffer = await imageFile.arrayBuffer();
-    const base64Data = Buffer.from(arrayBuffer).toString("base64");
+
+    const base64Data =
+      Buffer.from(arrayBuffer).toString("base64");
 
     const imagePart = {
       inlineData: {
@@ -92,185 +729,248 @@ export async function POST(req: NextRequest) {
       },
     };
 
-const prompt = `
-당신은 대한민국 초·중등 수학 교육과정 전문 AI 홈코치이자 엄격한 수학 검수관입니다.
-첨부된 이미지를 정밀 분석하여 요청된 모드("${mode}")에 맞추어 오직 순수 JSON 형식으로만 답변하세요. 다른 설명이나 마크다운 백틱(\`\`\`json)은 절대로 포함하지 마세요.
+    // ----------------------------------------------------------
+    // 6. 메인 분석
+    // ----------------------------------------------------------
 
-==================================================
-[정답-풀이 일치 검증 - 최우선]
-==================================================
-
-1. correct_answer는 문제를 읽은 직후 추측해서 작성하지 마세요.
-
-2. 반드시 solution_steps의 계산을 먼저 완성한 후,
-   마지막 계산 결과를 correct_answer에 그대로 복사하세요.
-
-3. correct_answer와 solution_steps의 최종 계산 결과가
-   단 하나라도 다르면 안 됩니다.
-
-4. 풀이 마지막 줄에서 구한 값이 정답입니다.
-
-5. 특히 x좌표, y좌표, 각도, 계수, 매개변수 등을
-   문제에서 주어진 값과 정답으로 혼동하지 마세요.
-
-6. 다음과 같은 경우는 절대 허용하지 않습니다.
-
-   예:
-   solution_steps 마지막:
-   "따라서 a = 2입니다."
-
-   correct_answer:
-   "-2"
-
-   → 잘못된 출력입니다.
-
-   반드시:
-   correct_answer: "2"
-
-7. 최종 응답 직전에 반드시 다음을 검산하세요.
-
-   [검산]
-   문제에서 요구하는 값 = a
-   풀이의 마지막 결과 = 2
-   correct_answer = 2
-
-   세 값이 일치하는 경우에만 JSON을 반환하세요.
-
-==================================================
-[학생 답안 스캔 및 채점 판정 - 최우선 절대 규칙]
-==================================================
-1. 이미지 내의 모든 문제를 순서대로 식별하세요.
-2. 각 문제 채점 전, 아래 [0단계]를 최우선으로 검사하세요:
-
-  0단계 [문서 유형 및 해설지 판별 - 최우선 가드레일]:
-    - 첨부된 이미지가 문제 번호 옆에 정답(예: 8) ①, 9) ②) 및 상세 풀이가 인쇄 텍스트로 완성되어 있는 '해설지/정답지'인 경우:
-      * 학생의 손글씨 작성본이 아니므로 이미지 내 모든 문항에 대해 아래와 같이 일괄 처리하고 채점을 중단하세요:
-      * "student_answer": "미작성"
-      * "is_correct": false
-      * "error_analysis": "해설지 이미지가 감지되었습니다. 학생이 풀이한 문제지 이미지를 다시 올려주세요."
-
-  1단계 [손글씨/표시 스캔 (일반 문제지일 경우)]:
-    - 인쇄된 문제지 텍스트와 학생이 연필, 펜, 색연필 등으로 직접 작성한 손글씨(숫자, 기호, 동그라미, 체크 표시 등)를 정밀하게 구분하세요.
-    - 인쇄체 텍스트는 절대로 학생 답안("student_answer")으로 수집하지 마세요.
-
-  2단계 [답안 존재 여부 판단]:
-    - **학생 손글씨/표시가 전혀 없는 경우**:
-      * "student_answer": "미작성"
-      * "is_correct": false
-      * "error_analysis": "문제지에 답안 표기가 없습니다. 직접 풀이 후 다시 촬영해 주세요."
-    - **지우개 자국만 있거나 손가락/빛 반사 등으로 답안을 전혀 알아볼 수 없는 경우**:
-      * "student_answer": "판독불가"
-      * "is_correct": false
-      * "error_analysis": "답안이 흐리거나 가려져 읽을 수 없습니다. 다시 명확히 작성해 주세요."
-
-  3단계 [실제 채점 진행]:
-    - **학생의 명확한 답안 표기가 존재하는 경우에만** 해당 답을 읽어 정답과 비교 채점합니다.
-    - 학생 작성 답안이 복수 정답 중 일부만 포함하거나 오답이면 "is_correct": false 처리합니다.
-    - 실제 정답과 완전히 일치하면 "is_correct": true 로 처리합니다.
-
-※ 절대 주의: 작성되지 않은 답안을 임의로 추측하거나 정답 처리하는 환각(Hallucination)을 엄격히 금지합니다.
-
-==================================================
-[중등 수학 기하/작도/명제 문제 검수 특이사항]
-==================================================
-1. 공간에서의 위치 관계(직선과 평면) 명제 판단 시 반례(평행, 일치 등)가 존재하는지 엄격히 검증하세요.
-   - 예: "공간에서 만나지 않는 두 직선 = 꼬인 위치" (❌ 거짓 - '평행' 반례 존재)
-   - 예: "엇각의 크기는 항상 같다" (❌ 거짓 - '두 직선이 평행할 때만' 성립)
-
-2. 평행선 및 꺾인 선 각도 문제:
-   - 꺾인 지점에 보조선을 그어 엇각/동위각 관계를 정확히 계산한 후, 구한 값과 적용된 성질((가) 또는 (나))이 모두 일치하는 선택지 번호를 정확히 매핑하세요.
-
-3. 삼각형의 작도 문제:
-   - 작도 과정 지문의 괄호 숫자 ①~⑤와 하단의 보기 선택지 ①~⑤는 별개입니다.
-   - 괄호 안에 들어갈 구체적인 점, 변, 각의 명칭을 명확히 추론한 후, 하단 보기 중 '옳지 않은 것'을 선택하세요. (예: 작도할 각은 $\\angle XBY$ 또는 $\\angle B$이므로 $\\angle BAC$라고 표기된 보기가 오답)
-
-==================================================
-[수식 및 LaTeX 작성 원칙 - $ 감싸기 및 이중 이스케이프 필수]
-==================================================
-1. [가장 중요] 정답(correct_answer), 풀이(solution_steps), 지문 등 **모든 수식 기호/분수 표현은 반드시 달러 기호($...$)로 감싸서 작성**하세요.
-   - ❌ 잘못된 예: "correct_answer": "\\\\frac{3}{4}" (달러 기호가 없으면 화면 렌더링 실패)
-   - ⭕ 올바른 예: "correct_answer": "$\\\\frac{3}{4}$"
-
-2. 분수를 작성할 때 역슬래시와 중괄호를 생략하지 마세요. (JSON 이스케이프 준수)
-   - ⭕ 올바른 예: "$\\\\frac{3}{4}$", "$y = -\\\\frac{6}{5}x$"
-
-3. 곱셈 기호는 "times"가 아니라 반드시 "\\\\times" 로 작성하세요.
-   - ⭕ 올바른 예: "$24a = 18 \\\\times 2$"
-
-==================================================
-[줄바꿈 및 보기 가독성 가이드]
-==================================================
-1. 등식이 포함된 수식은 좌/우변을 분리하지 말고 하나의 수식 기호 안($y = \\\\frac{3}{5}x$)에 작성하세요.
-2. 풀이 단계(solution_steps)나 보기 풀이 사이에는 반드시 줄바꿈(\\n)을 추가하세요.
-
-==================================================
-[JSON 반환 스키마]
-==================================================
-{
-  "mode": "${mode}",
-  "problems": [
-    {
-      "problem_number": "문항 번호 (예: 15번)",
-      "problem_text": "문제 지문 요약",
-      "correct_answer": "실제 정답 (예: '④' 또는 복수 정답시 '④, ⑤')",
-      "solution_steps": ["1단계 풀이", "2단계 풀이"],
-      "concept": "단원 및 핵심 개념",
-      ${
-        mode === "guide"
-          ? `"teaching_tip": "부모님 사전 지도 팁 및 함정 요소"`
-          : `"student_answer": "학생 작성 답안 (또는 '미작성' / '판독불가')",
-             "is_correct": false,
-             "error_analysis": "오답 원인 분석 (또는 미작성 안내)",
-             "parent_script": ["아이에게 전할 코칭 대화 1", "코칭 대화 2"],
-             "twin_problem": {
-               "question": "유사 쌍둥이 문제",
-               "answer": "쌍둥이 문제 정답 및 해설"
-             }`
-      }
-    }
-  ]
-}
-`;
+    const prompt = buildMainPrompt(mode);
 
     let lastError: any = null;
-    let parsedData = null;
+
+    let parsedData: AnalyzeResponse | null = null;
 
     for (const modelName of CANDIDATE_MODELS) {
       try {
-        console.log(`[AI 분석 시도] 모델: ${modelName}`);
+        console.log(
+          `[AI 분석 시도] 모델: ${modelName}`
+        );
 
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1,
-          },
-        });
+        parsedData = await generateAnalysis(
+          genAI,
+          modelName,
+          prompt,
+          imagePart
+        );
 
-        const result = await model.generateContent([prompt, imagePart]);
-        const responseText = result.response.text();
+        console.log(
+          "================ [Parsed JSON Data] ================"
+        );
 
-        console.log("================ [AI Raw Response] ================");
-        console.log(responseText);
-        console.log("==================================================");
+        console.log(
+          JSON.stringify(parsedData, null, 2)
+        );
 
-        parsedData = safeJsonParse(responseText);
+        console.log(
+          "==================================================="
+        );
 
-        console.log("================ [Parsed JSON Data] ================");
-        console.log(JSON.stringify(parsedData, null, 2));
-        console.log("===================================================");
         break;
       } catch (err: any) {
         lastError = err;
+
+        console.error(
+          `[AI 분석 실패] ${modelName}:`,
+          err?.message
+        );
       }
     }
 
+    // ----------------------------------------------------------
+    // 7. 메인 분석 실패
+    // ----------------------------------------------------------
+
     if (!parsedData) {
-      return NextResponse.json({ error: "분석 실패", details: lastError?.message }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "분석 실패",
+          details: lastError?.message,
+        },
+        {
+          status: 500,
+        }
+      );
     }
+
+    // ----------------------------------------------------------
+    // 8. ★ 정답 ↔ 풀이 불일치 자동 검출
+    // ----------------------------------------------------------
+
+    const mismatches =
+      findAnswerMismatches(parsedData);
+
+    console.log(
+      "================ [Answer Validation] ================"
+    );
+
+    if (mismatches.length === 0) {
+      console.log(
+        "정답-풀이 불일치 없음"
+      );
+    } else {
+      console.warn(
+        `정답-풀이 불일치 ${mismatches.length}건 발견`
+      );
+
+      for (const mismatch of mismatches) {
+        console.warn(
+          `[${parsedData.problems[mismatch.index].problem_number}]`,
+          {
+            correctAnswer: mismatch.correctAnswer,
+            finalAnswer: mismatch.finalAnswer,
+            normalizedCorrect:
+              mismatch.normalizedCorrect,
+            normalizedFinal:
+              mismatch.normalizedFinal,
+          }
+        );
+      }
+    }
+
+    console.log(
+      "======================================================"
+    );
+
+    // ----------------------------------------------------------
+    // 9. ★ 불일치 문제만 Gemini 재검증
+    // ----------------------------------------------------------
+
+    for (const mismatch of mismatches) {
+      const index = mismatch.index;
+
+      const originalProblem =
+        parsedData.problems[index];
+
+      console.log(
+        `\n[정답 재검증 시작] ${originalProblem.problem_number}`
+      );
+
+      const verification =
+        await revalidateProblem(
+          genAI,
+          imagePart,
+          mode,
+          originalProblem
+        );
+
+      if (!verification) {
+        console.warn(
+          `[정답 재검증 실패] 기존 결과 유지: ${originalProblem.problem_number}`
+        );
+
+        continue;
+      }
+
+      // --------------------------------------------------------
+      // 10. 재검증 결과 반영
+      // --------------------------------------------------------
+
+      console.log(
+        `[정답 재검증 결과] ${originalProblem.problem_number}`,
+        {
+          beforeCorrectAnswer:
+            originalProblem.correct_answer,
+
+          beforeFinalAnswer:
+            originalProblem.final_answer,
+
+          afterCorrectAnswer:
+            verification.correct_answer,
+
+          afterFinalAnswer:
+            verification.final_answer,
+        }
+      );
+
+      originalProblem.correct_answer =
+        verification.correct_answer;
+
+      originalProblem.final_answer =
+        verification.final_answer;
+
+      originalProblem.solution_steps =
+        verification.solution_steps;
+
+      // grade 모드라면 정답 변경 후 채점도 다시 계산
+      if (mode === "grade") {
+        recalculateGrade(originalProblem);
+
+        // 재검증 모델이 error_analysis를 제공한 경우
+        // 기존 분석보다 우선 사용
+        if (verification.error_analysis) {
+          originalProblem.error_analysis =
+            verification.error_analysis;
+        }
+      }
+    }
+
+    // ----------------------------------------------------------
+    // 11. 최종 수식 보정
+    // ----------------------------------------------------------
+
+    parsedData = fixMathInObject(
+      parsedData
+    ) as AnalyzeResponse;
+
+    // ----------------------------------------------------------
+    // 12. 최종 정답-풀이 검증 로그
+    // ----------------------------------------------------------
+
+    const finalMismatches =
+      findAnswerMismatches(parsedData);
+
+    console.log(
+      "================ [Final Answer Validation] ================"
+    );
+
+    if (finalMismatches.length === 0) {
+      console.log(
+        "✅ 모든 문제의 correct_answer와 final_answer가 일치합니다."
+      );
+    } else {
+      console.error(
+        "⚠️ 재검증 후에도 정답-풀이 불일치가 남아 있습니다."
+      );
+
+      for (const mismatch of finalMismatches) {
+        console.error(
+          parsedData.problems[mismatch.index].problem_number,
+          mismatch
+        );
+      }
+    }
+
+    console.log(
+      "============================================================"
+    );
+
+    // ----------------------------------------------------------
+    // 13. 내부 검증용 final_answer 제거 여부
+    // ----------------------------------------------------------
+    //
+    // 프론트에서 final_answer를 사용할 필요가 없다면
+    // 아래 코드를 활성화하세요.
+    //
+    // parsedData.problems.forEach((problem) => {
+    //   delete problem.final_answer;
+    // });
+    //
+    // 현재는 디버깅 및 검증을 위해 그대로 반환합니다.
+    // ----------------------------------------------------------
 
     return NextResponse.json(parsedData);
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message }, { status: 500 });
+    console.error(
+      "[analyze API Error]",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error: error?.message || "알 수 없는 오류",
+      },
+      {
+        status: 500,
+      }
+    );
   }
 }
