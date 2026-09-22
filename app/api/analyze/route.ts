@@ -188,8 +188,17 @@ const prompt = `
 
         const result = await model.generateContent([prompt, imagePart]);
         const responseText = result.response.text();
+// 1. AI가 리턴한 텍스트 원본 확인 (수식 깨짐, LaTeX 이스케이프 여부 확인용)
+console.log("================ [AI Raw Response] ================");
+console.log(responseText);
+console.log("==================================================");
 
         parsedData = safeJsonParse(responseText);
+
+// 2. 파싱 후 최종 반환되는 JSON 데이터 확인
+console.log("================ [Parsed JSON Data] ================");
+console.log(JSON.stringify(parsedData, null, 2)); // 가독성 좋게 들여쓰기 출력
+console.log("===================================================");
         break;
       } catch (err: any) {
         lastError = err;
