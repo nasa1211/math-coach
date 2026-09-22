@@ -21,8 +21,10 @@ function preprocessText(str: string): string {
   // 1. 제어 문자 제거
   res = res.replace(/[\x0C]/g, "");
 
-  // 2. 한 줄로 뭉쳐진 보기 번호(①~⑩) 및 단계 구분어 앞에 자동 줄바꿈(\n)
-  res = res.replace(/([^\n])\s*([①②③④⑤⑥⑦⑧⑨⑩])/g, "$1\n$2");
+  // 2. 마침표/문장부호 뒤에 뭉쳐 나온 보기 번호(①~⑩) 앞에만 줄바꿈 삽입
+  res = res.replace(/([.!?])\s*([①②③④⑤⑥⑦⑧⑨⑩])/g, "$1\n$2");
+
+  // 3. 단계 구분어(1단계:, 2단계:) 앞에 자동 줄바꿈
   res = res.replace(/([^\n])\s*(\d+단계:)/g, "$1\n$2");
 
   return res;
