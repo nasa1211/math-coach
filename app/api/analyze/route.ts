@@ -14,15 +14,13 @@ const CANDIDATE_MODELS = [
 
 // --- [수식 교정 엔진] ---
 function fixMath(str: string) {
+  if (typeof str !== "string") return str;
   let res = str;
-  
-  // 0. 과도한 역슬래시 축소 (\\frac -> \frac)
-  res = res.replace(/\\\\(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 1. 역슬래시가 없는 키워드 강제 복구
+  // 1. 역슬래시가 없는 키워드 보정 (예: frac{3}{5} -> \frac{3}{5})
   res = res.replace(/(?<![a-zA-Z\\])(frac|times|div|pm|left|right|sqrt|pi|neq)/g, "\\$1");
 
-  // 2. 중괄호 없이 숫자가 뭉친 분수 완벽 복구
+  // 2. 중괄호 빠진 분수 보정
   res = res.replace(/\\frac\s*([0-9]{1,2})\s*([0-9]{2})(?![0-9])/g, "\\frac{$1}{$2}");
   res = res.replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
 

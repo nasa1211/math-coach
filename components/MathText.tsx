@@ -11,7 +11,7 @@ interface MathTextProps {
 }
 
 /**
- * 텍스트 전처리: 줄바꿈 조절 및 순수 $...$ 짝 맞춤 보정만 진행
+ * 텍스트 전처리: 줄바꿈 조절 및 불필요 제어 문자 제거
  */
 function preprocessText(str: string): string {
   if (!str) return "";
@@ -25,14 +25,11 @@ function preprocessText(str: string): string {
   res = res.replace(/([^\n])\s*([①②③④⑤⑥⑦⑧⑨⑩])/g, "$1\n$2");
   res = res.replace(/([^\n])\s*(\d+단계:)/g, "$1\n$2");
 
-  // 3. 수식 기호 없이 노출된 분수(\frac{a}{b}) 구문만 최소한으로 $...$ 처리
-  res = res.replace(/(?<!\$)\\frac\{[^{}]+\}\{[^{}]+\}(?!\$)/g, "$&$");
-
   return res;
 }
 
 /**
- * KaTeX 수식 구문 정제 (역슬래시 및 괄호 보정)
+ * KaTeX 수식 구문 정제 (누락된 역슬래시 보정)
  */
 function cleanLatexForKatex(mathStr: string): string {
   return mathStr
