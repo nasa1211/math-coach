@@ -2,15 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const CANDIDATE_MODELS = [
-  "gemini-2.5-pro",
-  "gemini-3.6-flash",
-  "gemini-2.5-flash",
-  "gemini-3.1-flash-lite-preview",
-  "gemini-2.5-flash-lite",
-  "gemini-1.5-pro",
-  "gemini-1.5-flash",
-];
+const MODEL_NAME = "gemini-2.5-flash";
 
 // --- [수식 교정 엔진] ---
 function fixMath(str: string) {
@@ -209,44 +201,19 @@ const prompt = `
 }
 `;
 
-    let lastError: any = null;
-    let parsedData = null;
+    const model = genAI.getGenerativeModel({
+      model: MODEL_NAME,
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.1,
+      },
+    });
 
-    for (const modelName of CANDIDATE_MODELS) {
-      try {
-        console.log(`[AI 분석 시도] 모델: ${modelName}`);
+    const result = await model.generateContent([prompt, imagePart]);
+    const responseText = result.response.text();
+    const parsedData = safeJsonParse(responseText);
 
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1,
-          },
-        });
-
-        const result = await model.generateContent([prompt, imagePart]);
-        const responseText = result.response.text();
-
-        console.log("================ [AI Raw Response] ================");
-        console.log(responseText);
-        console.log("==================================================");
-
-        parsedData = safeJsonParse(responseText);
-
-        console.log("================ [Parsed JSON Data] ================");
-        console.log(JSON.stringify(parsedData, null, 2));
-        console.log("===================================================");
-        break;
-      } catch (err: any) {
-        lastError = err;
-      }
-    }
-
-    if (!parsedData) {
-      return NextResponse.json({ error: "분석 실패", details: lastError?.message }, { status: 500 });
-    }
-
-    return NextResponse.json(parsedData);
+    return NextResponse.json({ ...parsedData, modelUsed: MODEL_NAME });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message }, { status: 500 });
   }
