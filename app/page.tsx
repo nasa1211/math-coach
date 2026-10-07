@@ -5,6 +5,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
 import { shareOrDownloadElement } from "@/utils/exportImage";
+import { fitWithin } from "@/utils/fitImageSize";
 
 interface ProblemItem {
   problem_number: string;
@@ -78,23 +79,13 @@ async function compressImage(file: File): Promise<Blob> {
         return;
       }
 
-      const MAX_WIDTH = 2048;
-      const MAX_HEIGHT = 2048;
-      let width = img.width;
-      let height = img.height;
-
-      if (width > height) {
-        if (width > MAX_WIDTH) {
-          height = Math.round((height * MAX_WIDTH) / width);
-          width = MAX_WIDTH;
-        }
-      } else {
-        if (height > MAX_HEIGHT) {
-          width = Math.round((height * MAX_HEIGHT) / height);
-          height = MAX_HEIGHT;
-        }
+      const fitted = fitWithin(img.width, img.height, 2048);
+      if (!fitted) {
+        resolve(file);
+        return;
       }
 
+      const { width, height } = fitted;
       canvas.width = width;
       canvas.height = height;
 
@@ -235,11 +226,11 @@ export default function MathCoachPage() {
     document.documentElement.style.setProperty("--font-scale", scale);
   };
 
-  const handleLogout = () => {
-    if (confirm("로그아웃하고 화면을 잠그시겠습니까?")) {
-      localStorage.removeItem("math_coach_auth");
-      window.location.reload();
-    }
+  const handleLogout = async () => {
+    if (!confirm("로그아웃하고 화면을 잠그시겠습니까?")) return;
+    await fetch("/api/auth/logout", { method: "POST" });
+    localStorage.removeItem("math_coach_auth");
+    window.location.reload();
   };
 
   const saveToHistory = (mode: "grade" | "guide", problems: ProblemItem[]) => {
@@ -338,6 +329,7 @@ export default function MathCoachPage() {
 
       const res = await fetch("/api/analyze", {
         method: "POST",
+        credentials: "same-origin",
         headers: {
           "Bypass-Tunnel-Reminder": "true",
         },
@@ -600,7 +592,7 @@ export default function MathCoachPage() {
                   {currentLoadingSteps[stepIdx]}
                 </p>
               </div>
-            ) : results && results.length > 0 ? (
+            ) : !errorMsg && results && results.length > 0 ? (
               <div className="space-y-4 sm:space-y-6" ref={reportContainerRef}>
                 <div className="flex flex-wrap items-center justify-between pb-2 sm:pb-3 border-b border-slate-200 dark:border-slate-800 gap-2 px-1">
                   <div className="flex items-center gap-2">
@@ -817,6 +809,22 @@ export default function MathCoachPage() {
                     )}
                   </article>
                 ))}
+              </div>
+            ) : errorMsg ? (
+              <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl border border-red-100 dark:border-red-900/50 shadow-sm text-center space-y-3">
+                <span className="text-4xl">⚠️</span>
+                <p className="text-base font-bold text-red-600 dark:text-red-400">분석을 마치지 못했습니다</p>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{errorMsg}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setActiveTab("camera");
+                  }}
+                  className="mt-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors cursor-pointer"
+                >
+                  촬영 화면으로 돌아가기
+                </button>
               </div>
             ) : (
               <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center p-8 sm:p-12 text-center text-slate-400 dark:text-slate-500 bg-white/50 dark:bg-slate-900/30">

@@ -1,6 +1,10 @@
 // app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
+
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const MODEL_NAME = "gemini-2.5-flash";
 
@@ -60,12 +64,39 @@ function safeJsonParse(rawText: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    const passcode = readAccessPasscode();
+    if (!passcode) {
+      return NextResponse.json(
+        { error: "서버 접근 암호(ACCESS_PASSCODE)가 설정되지 않았습니다." },
+        { status: 500 }
+      );
+    }
+
+    const jar = await cookies();
+    if (!sessionMatches(jar.get(SESSION_COOKIE)?.value, passcode)) {
+      return NextResponse.json(
+        { error: "로그인이 필요합니다. 접근 암호를 다시 입력해 주세요." },
+        { status: 401 }
+      );
+    }
+
     const formData = await req.formData();
     const imageFile = formData.get("image") as Blob | null;
     const mode = (formData.get("mode") as string) || "grade";
 
     if (!imageFile) {
       return NextResponse.json({ error: "이미지가 전송되지 않았습니다." }, { status: 400 });
+    }
+
+    if (imageFile.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json(
+        { error: "이미지가 너무 큽니다. 문제 영역만 잘라 다시 올려 주세요." },
+        { status: 400 }
+      );
+    }
+
+    if (imageFile.type && !imageFile.type.startsWith("image/")) {
+      return NextResponse.json({ error: "이미지 파일만 분석할 수 있습니다." }, { status: 400 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
