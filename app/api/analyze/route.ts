@@ -255,7 +255,7 @@ const prompt = `
       model: MODEL_NAME,
       generationConfig: {
         responseMimeType: "application/json",
-        thinkingConfig: { thinkingLevel: "high" },
+        thinkingConfig: { thinkingLevel: "medium" },
       } as GenerationConfig,
     });
 
