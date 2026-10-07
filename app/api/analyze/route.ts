@@ -9,11 +9,11 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const MODEL_BY_CHOICE: Record<ModelChoice, { id: string; generationConfig: GenerationConfig }> = {
   pro: {
-    id: "gemini-2.5-pro",
+    id: "gemini-3.1-pro-preview",
     generationConfig: {
       responseMimeType: "application/json",
-      temperature: 0.1,
-    },
+      thinkingConfig: { thinkingLevel: "medium" },
+    } as GenerationConfig,
   },
   flash: {
     id: "gemini-3.8-flash",

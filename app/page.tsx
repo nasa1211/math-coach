@@ -991,7 +991,7 @@ export default function MathCoachPage() {
                     }`}
                   >
                     <span className="block text-sm font-bold text-slate-900 dark:text-white">정확하고 빠르게</span>
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 2.5 Pro · 기본</span>
+                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 3.1 Pro · 기본</span>
                   </button>
                   <button
                     type="button"
