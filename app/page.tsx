@@ -6,6 +6,7 @@ import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
 import { shareOrDownloadElement } from "@/utils/exportImage";
 import { fitWithin } from "@/utils/fitImageSize";
+import { ANALYSIS_FORMAT_ERROR } from "@/lib/analysisResult";
 import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
 import { gradeBadge, gradeKind, gradeSummary, historyScoreLabel } from "@/utils/gradeStatus";
 
@@ -134,7 +135,9 @@ export default function MathCoachPage() {
   const [activeTab, setActiveTab] = useState<TabType>("camera");
   const [activeMode, setActiveMode] = useState<"grade" | "guide">("grade");
   const [file, setFile] = useState<File | null>(null);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const previewRef = useRef<string | null>(null);
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
   const [isCropperOpen, setIsCropperOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -316,6 +319,15 @@ export default function MathCoachPage() {
     localStorage.removeItem(STORAGE_KEY);
   };
 
+  const showPreview = (next: string) => {
+    const current = previewRef.current;
+    if (current && current.startsWith("blob:") && current !== next) {
+      URL.revokeObjectURL(current);
+    }
+    previewRef.current = next;
+    setPreview(next);
+  };
+
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
@@ -323,8 +335,9 @@ export default function MathCoachPage() {
       const reader = new FileReader();
       reader.onload = () => {
         const base64Data = reader.result as string;
+        setOriginalFile(selectedFile);
         setRawImageSrc(base64Data);
-        setPreview(base64Data);
+        showPreview(base64Data);
         setFile(selectedFile);
         setIsCropperOpen(true);
       };
@@ -340,7 +353,13 @@ export default function MathCoachPage() {
       type: "image/jpeg",
     });
     setFile(croppedFile);
-    setPreview(croppedUrl);
+    showPreview(croppedUrl);
+    setIsCropperOpen(false);
+  };
+
+  const handleUseOriginal = () => {
+    if (originalFile) setFile(originalFile);
+    if (rawImageSrc) showPreview(rawImageSrc);
     setIsCropperOpen(false);
   };
 
@@ -376,8 +395,11 @@ export default function MathCoachPage() {
       }
 
       const data: AnalysisResponse = await res.json();
-      const parsedProblems = data.problems || [];
-      const appliedMode = data.mode || activeMode;
+      if (!Array.isArray(data.problems) || data.problems.length === 0) {
+        throw new Error(ANALYSIS_FORMAT_ERROR);
+      }
+      const parsedProblems = data.problems;
+      const appliedMode = data.mode === "guide" || data.mode === "grade" ? data.mode : activeMode;
 
       setResults(parsedProblems);
       setResultMode(appliedMode);
@@ -1169,6 +1191,7 @@ export default function MathCoachPage() {
             imageSrc={rawImageSrc}
             onCropComplete={handleCropComplete}
             onCancel={() => setIsCropperOpen(false)}
+            onUseOriginal={handleUseOriginal}
           />
         </div>
       )}
