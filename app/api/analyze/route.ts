@@ -18,11 +18,10 @@ const MODEL_BY_CHOICE: Record<ModelChoice, { id: string; generationConfig: Gener
     } as GenerationConfig,
   },
   flash: {
-    id: "gemini-3.8-flash",
+    id: "gemini-3.6-flash",
     generationConfig: {
       responseMimeType: "application/json",
-      thinkingConfig: { thinkingLevel: "high" },
-    } as GenerationConfig,
+    },
   },
 };
 
