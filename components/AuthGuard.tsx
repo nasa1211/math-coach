@@ -11,26 +11,42 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [inputCode, setInputCode] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
 
-  const CORRECT_PASSCODE = process.env.NEXT_PUBLIC_ACCESS_PASSCODE || "2026math";
-
   useEffect(() => {
-    const authStatus = localStorage.getItem("math_coach_auth");
-    if (authStatus === "true") {
-      setIsAuthenticated(true);
-    } else {
-      setIsAuthenticated(false);
-    }
+    let cancelled = false;
+    fetch("/api/auth/session", { credentials: "same-origin" })
+      .then((res) => res.json())
+      .then((data: { ok?: boolean }) => {
+        if (!cancelled) setIsAuthenticated(data.ok === true);
+      })
+      .catch(() => {
+        if (!cancelled) setIsAuthenticated(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputCode.trim() === CORRECT_PASSCODE) {
-      localStorage.setItem("math_coach_auth", "true");
+    setErrorMsg("");
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: inputCode.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setErrorMsg(data.error || "접근 암호가 올바르지 않습니다.");
+        setInputCode("");
+        return;
+      }
+      localStorage.removeItem("math_coach_auth");
       setIsAuthenticated(true);
-      setErrorMsg("");
-    } else {
-      setErrorMsg("접근 암호가 올바르지 않습니다.");
-      setInputCode("");
+    } catch {
+      setErrorMsg("로그인 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
   };
 

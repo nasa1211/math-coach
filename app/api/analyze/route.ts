@@ -1,16 +1,12 @@
 // app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
 
-const CANDIDATE_MODELS = [
-  "gemini-2.5-pro",
-  "gemini-3.6-flash",
-  "gemini-2.5-flash",
-  "gemini-3.1-flash-lite-preview",
-  "gemini-2.5-flash-lite",
-  "gemini-1.5-pro",
-  "gemini-1.5-flash",
-];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+const MODEL_NAME = "gemini-2.5-flash";
 
 // --- [수식 교정 엔진] ---
 function fixMath(str: string) {
@@ -68,12 +64,39 @@ function safeJsonParse(rawText: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    const passcode = readAccessPasscode();
+    if (!passcode) {
+      return NextResponse.json(
+        { error: "서버 접근 암호(ACCESS_PASSCODE)가 설정되지 않았습니다." },
+        { status: 500 }
+      );
+    }
+
+    const jar = await cookies();
+    if (!sessionMatches(jar.get(SESSION_COOKIE)?.value, passcode)) {
+      return NextResponse.json(
+        { error: "로그인이 필요합니다. 접근 암호를 다시 입력해 주세요." },
+        { status: 401 }
+      );
+    }
+
     const formData = await req.formData();
     const imageFile = formData.get("image") as Blob | null;
     const mode = (formData.get("mode") as string) || "grade";
 
     if (!imageFile) {
       return NextResponse.json({ error: "이미지가 전송되지 않았습니다." }, { status: 400 });
+    }
+
+    if (imageFile.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json(
+        { error: "이미지가 너무 큽니다. 문제 영역만 잘라 다시 올려 주세요." },
+        { status: 400 }
+      );
+    }
+
+    if (imageFile.type && !imageFile.type.startsWith("image/")) {
+      return NextResponse.json({ error: "이미지 파일만 분석할 수 있습니다." }, { status: 400 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -209,44 +232,19 @@ const prompt = `
 }
 `;
 
-    let lastError: any = null;
-    let parsedData = null;
+    const model = genAI.getGenerativeModel({
+      model: MODEL_NAME,
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.1,
+      },
+    });
 
-    for (const modelName of CANDIDATE_MODELS) {
-      try {
-        console.log(`[AI 분석 시도] 모델: ${modelName}`);
+    const result = await model.generateContent([prompt, imagePart]);
+    const responseText = result.response.text();
+    const parsedData = safeJsonParse(responseText);
 
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1,
-          },
-        });
-
-        const result = await model.generateContent([prompt, imagePart]);
-        const responseText = result.response.text();
-
-        console.log("================ [AI Raw Response] ================");
-        console.log(responseText);
-        console.log("==================================================");
-
-        parsedData = safeJsonParse(responseText);
-
-        console.log("================ [Parsed JSON Data] ================");
-        console.log(JSON.stringify(parsedData, null, 2));
-        console.log("===================================================");
-        break;
-      } catch (err: any) {
-        lastError = err;
-      }
-    }
-
-    if (!parsedData) {
-      return NextResponse.json({ error: "분석 실패", details: lastError?.message }, { status: 500 });
-    }
-
-    return NextResponse.json(parsedData);
+    return NextResponse.json({ ...parsedData, modelUsed: MODEL_NAME });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message }, { status: 500 });
   }
