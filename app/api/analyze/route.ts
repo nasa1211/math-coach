@@ -1,12 +1,31 @@
 // app/api/analyze/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
 import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-const MODEL_NAME = "gemini-2.5-flash";
+const MODEL_NAME = "gemini-3.8-flash";
+
+export const maxDuration = 60;
+
+type AnswerPart = { text?: string; thought?: boolean };
+
+function visibleAnswerText(response: {
+  text: () => string;
+  candidates?: Array<{ content?: { parts?: AnswerPart[] } }>;
+}): string {
+  const parts = response.candidates?.[0]?.content?.parts;
+  if (!parts) return response.text();
+
+  const answer = parts
+    .filter((part) => part.thought !== true && part.text)
+    .map((part) => part.text)
+    .join("");
+
+  return answer || response.text();
+}
 
 // --- [수식 교정 엔진] ---
 function fixMath(str: string) {
@@ -236,12 +255,12 @@ const prompt = `
       model: MODEL_NAME,
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.1,
-      },
+        thinkingConfig: { thinkingLevel: "high" },
+      } as GenerationConfig,
     });
 
     const result = await model.generateContent([prompt, imagePart]);
-    const responseText = result.response.text();
+    const responseText = visibleAnswerText(result.response);
     const parsedData = safeJsonParse(responseText);
 
     return NextResponse.json({ ...parsedData, modelUsed: MODEL_NAME });
