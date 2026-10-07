@@ -7,6 +7,7 @@ import ImageCropperModal from "@/components/ImageCropperModal";
 import { shareOrDownloadElement } from "@/utils/exportImage";
 import { fitWithin } from "@/utils/fitImageSize";
 import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
+import { gradeBadge, gradeKind, gradeSummary, historyScoreLabel } from "@/utils/gradeStatus";
 
 interface ProblemItem {
   problem_number: string;
@@ -61,6 +62,24 @@ const GUIDE_LOADING_STEPS = [
 
 const STORAGE_KEY = "math_coach_history_v1";
 const MODEL_STORAGE_KEY = "math_coach_model";
+
+function ProblemGradeBadge({ problem }: { problem: ProblemItem }) {
+  const badge = gradeBadge(gradeKind(problem));
+  const toneClass =
+    badge.tone === "green"
+      ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200/60 dark:border-green-800/40"
+      : badge.tone === "red"
+        ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40"
+        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700";
+
+  return (
+    <span
+      className={`text-[11px] sm:text-xs font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full whitespace-nowrap shrink-0 ${toneClass}`}
+    >
+      {badge.label}
+    </span>
+  );
+}
 
 async function compressImage(file: File): Promise<Blob> {
   const SAFE_LIMIT = 4.0 * 1024 * 1024;
@@ -412,6 +431,8 @@ export default function MathCoachPage() {
     }
   };
 
+  const gradeCounts = results && resultMode === "grade" ? gradeSummary(results) : null;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans transition-colors ios-safe-content-pb">
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 transition-colors mobile-landscape-header">
@@ -621,14 +642,19 @@ export default function MathCoachPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {resultMode === "grade" && (
+                    {gradeCounts && (
                       <div className="flex gap-1.5">
                         <span className="text-xs bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-semibold border border-green-200 dark:border-green-800/60">
-                          정답 {results.filter((p) => p.is_correct).length}
+                          정답 {gradeCounts.correct}
                         </span>
                         <span className="text-xs bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-semibold border border-red-200 dark:border-red-800/60">
-                          오답 {results.filter((p) => !p.is_correct).length}
+                          오답 {gradeCounts.wrong}
                         </span>
+                        {gradeCounts.skipped > 0 && (
+                          <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg font-semibold border border-slate-200 dark:border-slate-700">
+                            미채점 {gradeCounts.skipped}
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -659,17 +685,7 @@ export default function MathCoachPage() {
                           <span className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white shrink-0">
                             {prob.problem_number || `${idx + 1}번`}
                           </span>
-                          {resultMode === "grade" && (
-                            <span
-                              className={`text-[11px] sm:text-xs font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full whitespace-nowrap shrink-0 ${
-                                prob.is_correct
-                                  ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200/60 dark:border-green-800/40"
-                                  : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200/60 dark:border-red-800/40"
-                              }`}
-                            >
-                              {prob.is_correct ? "정답" : "오답 코칭 필요"}
-                            </span>
-                          )}
+                          {resultMode === "grade" && <ProblemGradeBadge problem={prob} />}
                         </div>
 
                         <button
@@ -779,7 +795,7 @@ export default function MathCoachPage() {
                           </div>
                         )}
 
-                        {!prob.is_correct && prob.parent_script && (
+                        {gradeKind(prob) === "wrong" && prob.parent_script && (
                           <div className="bg-amber-50/80 dark:bg-amber-950/30 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-900/50">
                             <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 mb-2 sm:mb-2.5 flex items-center gap-1.5">
                               <span>💬</span> 아이에게 이렇게 코칭해 보세요
@@ -889,8 +905,6 @@ export default function MathCoachPage() {
             {historyList.length > 0 ? (
               <div className="space-y-3">
                 {historyList.map((item) => {
-                  const correctCount = item.problems.filter((p) => p.is_correct).length;
-                  const totalCount = item.problems.length;
                   const dateStr = new Date(item.timestamp).toLocaleString("ko-KR", {
                     month: "numeric",
                     day: "numeric",
@@ -922,7 +936,7 @@ export default function MathCoachPage() {
 
                           {item.mode === "grade" && (
                             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                              (정답 {correctCount}/{totalCount})
+                              ({historyScoreLabel(item.problems)})
                             </span>
                           )}
                         </div>

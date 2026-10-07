@@ -2,9 +2,10 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from "react-image-crop";
+import ReactCrop, { Crop, PixelCrop, centerCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import getCroppedImg from "@/utils/cropImage";
+import { selectionPixelCrop } from "@/utils/selectionCrop";
 
 interface ImageCropperModalProps {
   imageSrc: string;
@@ -22,7 +23,7 @@ export default function ImageCropperModal({
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // 이미지가 로드되었을 때 화면 중앙 80% 영역을 초기 사각형으로 지정
+  // 이미지가 로드되었을 때 화면 중앙 85% × 60% 영역을 초기 사각형으로 지정
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
     const initialCrop = centerCrop(
@@ -35,20 +36,22 @@ export default function ImageCropperModal({
       height
     );
     setCrop(initialCrop);
+    setCompletedCrop(selectionPixelCrop(null, initialCrop, width, height));
   };
 
   const handleDone = async () => {
-    if (!imgRef.current) return;
+    const image = imgRef.current;
+    if (!image) return;
 
-    // 만약 사용자가 박스를 전혀 조절하지 않았다면 원본 그대로 진행
-    if (!completedCrop || completedCrop.width === 0 || completedCrop.height === 0) {
+    const pixelCrop = selectionPixelCrop(completedCrop, crop, image.width, image.height);
+    if (!pixelCrop) {
       onCancel();
       return;
     }
 
     try {
       setIsProcessing(true);
-      const { blob, url } = await getCroppedImg(imgRef.current, completedCrop);
+      const { blob, url } = await getCroppedImg(image, pixelCrop);
       onCropComplete(blob, url);
     } catch (e) {
       console.error("크롭 처리 실패:", e);
