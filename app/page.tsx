@@ -126,7 +126,7 @@ export default function MathCoachPage() {
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
   const [fontScale, setFontScale] = useState<string>("1.0");
-  const [modelChoice, setModelChoice] = useState<ModelChoice>("flash");
+  const [modelChoice, setModelChoice] = useState<ModelChoice>("pro");
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
   // 최근 기록(히스토리) 상태
@@ -983,18 +983,6 @@ export default function MathCoachPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => changeModelChoice("pro")}
-                    className={`text-left p-3 rounded-2xl border transition-colors cursor-pointer ${
-                      modelChoice === "pro"
-                        ? "bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700"
-                        : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700"
-                    }`}
-                  >
-                    <span className="block text-sm font-bold text-slate-900 dark:text-white">정확하고 빠르게</span>
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 3.1 Pro</span>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => changeModelChoice("flash")}
                     className={`text-left p-3 rounded-2xl border transition-colors cursor-pointer ${
                       modelChoice === "flash"
@@ -1003,7 +991,19 @@ export default function MathCoachPage() {
                     }`}
                   >
                     <span className="block text-sm font-bold text-slate-900 dark:text-white">저렴하게</span>
-                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 3.8 Flash · 기본</span>
+                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 3.8 Flash · 고사고</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => changeModelChoice("pro")}
+                    className={`text-left p-3 rounded-2xl border transition-colors cursor-pointer ${
+                      modelChoice === "pro"
+                        ? "bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700"
+                        : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    <span className="block text-sm font-bold text-slate-900 dark:text-white">정확하고 빠르게</span>
+                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 3.1 Pro · 기본</span>
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-relaxed">
