@@ -3,10 +3,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
 import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
+import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-const MODEL_NAME = "gemini-3.8-flash";
+const MODEL_BY_CHOICE: Record<ModelChoice, { id: string; generationConfig: GenerationConfig }> = {
+  pro: {
+    id: "gemini-2.5-pro",
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.1,
+    },
+  },
+  flash: {
+    id: "gemini-3.8-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingLevel: "high" },
+    } as GenerationConfig,
+  },
+};
 
 export const maxDuration = 60;
 
@@ -102,6 +118,8 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const imageFile = formData.get("image") as Blob | null;
     const mode = (formData.get("mode") as string) || "grade";
+    const modelChoice = parseModelChoice(formData.get("modelChoice"));
+    const selectedModel = MODEL_BY_CHOICE[modelChoice];
 
     if (!imageFile) {
       return NextResponse.json({ error: "이미지가 전송되지 않았습니다." }, { status: 400 });
@@ -252,18 +270,15 @@ const prompt = `
 `;
 
     const model = genAI.getGenerativeModel({
-      model: MODEL_NAME,
-      generationConfig: {
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingLevel: "medium" },
-      } as GenerationConfig,
+      model: selectedModel.id,
+      generationConfig: selectedModel.generationConfig,
     });
 
     const result = await model.generateContent([prompt, imagePart]);
     const responseText = visibleAnswerText(result.response);
     const parsedData = safeJsonParse(responseText);
 
-    return NextResponse.json({ ...parsedData, modelUsed: MODEL_NAME });
+    return NextResponse.json({ ...parsedData, modelUsed: selectedModel.id });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message }, { status: 500 });
   }

@@ -6,6 +6,7 @@ import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
 import { shareOrDownloadElement } from "@/utils/exportImage";
 import { fitWithin } from "@/utils/fitImageSize";
+import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
 
 interface ProblemItem {
   problem_number: string;
@@ -59,6 +60,7 @@ const GUIDE_LOADING_STEPS = [
 ];
 
 const STORAGE_KEY = "math_coach_history_v1";
+const MODEL_STORAGE_KEY = "math_coach_model";
 
 async function compressImage(file: File): Promise<Blob> {
   const SAFE_LIMIT = 4.0 * 1024 * 1024;
@@ -124,6 +126,7 @@ export default function MathCoachPage() {
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
   const [fontScale, setFontScale] = useState<string>("1.0");
+  const [modelChoice, setModelChoice] = useState<ModelChoice>("pro");
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
 
   // 최근 기록(히스토리) 상태
@@ -147,6 +150,9 @@ export default function MathCoachPage() {
       if (saved) {
         setHistoryList(JSON.parse(saved));
       }
+
+      const savedModel = parseModelChoice(localStorage.getItem(MODEL_STORAGE_KEY));
+      setModelChoice(savedModel);
 
       const savedScale = localStorage.getItem("font_scale");
       if (savedScale) {
@@ -218,6 +224,11 @@ export default function MathCoachPage() {
       document.documentElement.classList.remove("dark");
       localStorage.setItem("theme", "light");
     }
+  };
+
+  const changeModelChoice = (choice: ModelChoice) => {
+    setModelChoice(choice);
+    localStorage.setItem(MODEL_STORAGE_KEY, choice);
   };
 
   const changeFontScale = (scale: string) => {
@@ -326,6 +337,7 @@ export default function MathCoachPage() {
       const formData = new FormData();
       formData.append("image", compressedBlob, "upload.jpg");
       formData.append("mode", activeMode);
+      formData.append("modelChoice", modelChoice);
 
       const res = await fetch("/api/analyze", {
         method: "POST",
@@ -958,12 +970,47 @@ export default function MathCoachPage() {
                 <span>⚙️</span>
                 <span>앱 환경 설정</span>
               </h3>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                화면 테마, 글자 크기 및 계정 보안을 설정합니다.
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                채점 모델, 화면 테마, 글자 크기 및 계정 보안을 설정합니다.
               </p>
             </div>
 
             <div className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+              <div className="pb-4 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 block">
+                  채점 모델
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => changeModelChoice("pro")}
+                    className={`text-left p-3 rounded-2xl border transition-colors cursor-pointer ${
+                      modelChoice === "pro"
+                        ? "bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700"
+                        : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    <span className="block text-sm font-bold text-slate-900 dark:text-white">정확하고 빠르게</span>
+                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 2.5 Pro · 기본</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => changeModelChoice("flash")}
+                    className={`text-left p-3 rounded-2xl border transition-colors cursor-pointer ${
+                      modelChoice === "flash"
+                        ? "bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700"
+                        : "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    <span className="block text-sm font-bold text-slate-900 dark:text-white">저렴하게</span>
+                    <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-1">Gemini 3.8 Flash · 고사고</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-relaxed">
+                  저렴한 모델은 사고 단계가 길어 같은 사진도 더 오래 걸릴 수 있습니다.
+                </p>
+              </div>
+
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   🌙 다크 모드
