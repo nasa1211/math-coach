@@ -11,12 +11,14 @@ interface ImageCropperModalProps {
   imageSrc: string;
   onCropComplete: (croppedBlob: Blob, croppedUrl: string) => void;
   onCancel: () => void;
+  onUseOriginal: () => void;
 }
 
 export default function ImageCropperModal({
   imageSrc,
   onCropComplete,
   onCancel,
+  onUseOriginal,
 }: ImageCropperModalProps) {
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [crop, setCrop] = useState<Crop>();
@@ -56,7 +58,7 @@ export default function ImageCropperModal({
     } catch (e) {
       console.error("크롭 처리 실패:", e);
       alert("영역 자르기에 실패했습니다. 원본 사진을 사용합니다.");
-      onCancel();
+      onUseOriginal();
     } finally {
       setIsProcessing(false);
     }
@@ -107,7 +109,7 @@ export default function ImageCropperModal({
       <div className="shrink-0 p-4 bg-slate-900/95 text-white border-t border-slate-800 flex gap-2.5 pb-[calc(env(safe-area-inset-bottom,12px)+12px)]">
         <button
           type="button"
-          onClick={onCancel}
+          onClick={onUseOriginal}
           className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 active:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs sm:text-sm transition-colors"
         >
           원본 전체 사용
