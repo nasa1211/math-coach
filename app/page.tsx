@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, ChangeEvent } from "react";
-import ThemeToggle from "@/components/ThemeToggle";
 import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
 import { shareOrDownloadElement } from "@/utils/exportImage";
