@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, ChangeEvent } from "react";
+import Link from "next/link";
 import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
 import { shareOrDownloadElement } from "@/utils/exportImage";
@@ -8,6 +9,7 @@ import { fitWithin } from "@/utils/fitImageSize";
 import { ANALYSIS_FORMAT_ERROR } from "@/lib/analysisResult";
 import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
 import { gradeBadge, gradeKind, gradeSummary, historyScoreLabel } from "@/utils/gradeStatus";
+import { appendWrongNotes } from "@/lib/wrongNote";
 
 interface ProblemItem {
   problem_number: string;
@@ -402,6 +404,9 @@ export default function MathCoachPage() {
 
       setResults(parsedProblems);
       setResultMode(appliedMode);
+      if (appliedMode === "grade") {
+        appendWrongNotes(parsedProblems, Date.now());
+      }
       saveToHistory(appliedMode, parsedProblems);
     } catch (err: unknown) {
       console.error("전송 에러:", err);
@@ -910,6 +915,12 @@ export default function MathCoachPage() {
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                   최근 분석한 최대 30개의 코칭 리포트를 보관합니다.
                 </p>
+                <Link
+                  href="/report"
+                  className="inline-flex mt-2 text-xs font-bold text-indigo-600 dark:text-indigo-300"
+                >
+                  오답 학습 진단 보기
+                </Link>
               </div>
 
               {historyList.length > 0 && (

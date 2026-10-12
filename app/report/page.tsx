@@ -1,0 +1,236 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import MathText from "@/components/MathText";
+import type { DiagnosisReport } from "@/lib/diagnosisReport";
+import { parseModelChoice } from "@/lib/modelChoice";
+import {
+  classifyErrorPattern,
+  clearWrongNotes,
+  conceptCounts,
+  errorPatternLabel,
+  loadWrongNotes,
+  patternCounts,
+  type WrongNote,
+} from "@/lib/wrongNote";
+
+const MODEL_STORAGE_KEY = "math_coach_model";
+
+export default function ReportPage() {
+  const [notes, setNotes] = useState<WrongNote[] | null>(null);
+  const [report, setReport] = useState<DiagnosisReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNotes(loadWrongNotes());
+  }, []);
+
+  const concepts = notes ? conceptCounts(notes) : [];
+  const patterns = notes ? patternCounts(notes) : [];
+  const maxConcept = concepts[0]?.count ?? 1;
+
+  const requestDiagnosis = async () => {
+    if (!notes || notes.length === 0) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/analyze-report", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wrongs: notes.slice(0, 40),
+          modelChoice: parseModelChoice(localStorage.getItem(MODEL_STORAGE_KEY)),
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as DiagnosisReport & { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "학습 진단을 마치지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+      if (!data.overall_status || !Array.isArray(data.top_weak_concepts) || !data.prescription) {
+        throw new Error("진단 결과 형식이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.");
+      }
+      setReport({
+        overall_status: data.overall_status,
+        top_weak_concepts: data.top_weak_concepts,
+        prescription: data.prescription,
+      });
+    } catch (error: unknown) {
+      setErrorMsg(error instanceof Error ? error.message : "학습 진단을 마치지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClear = () => {
+    if (!confirm("누적된 오답 노트를 모두 삭제할까요?")) return;
+    clearWrongNotes();
+    setNotes([]);
+    setReport(null);
+    setErrorMsg(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans ios-safe-content-pb">
+      <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">오답 학습 진단</h1>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">틀린 문항만 모아 취약 개념을 봅니다.</p>
+          </div>
+          <Link
+            href="/"
+            className="text-xs font-bold text-indigo-600 dark:text-indigo-300 px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800"
+          >
+            홈으로
+          </Link>
+        </div>
+      </header>
+
+      <main className="max-w-xl mx-auto px-4 py-4 space-y-4">
+        {notes === null ? (
+          <p className="text-sm text-slate-400">오답 기록을 불러오는 중입니다.</p>
+        ) : notes.length === 0 ? (
+          <section className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-3">
+            <p className="text-base font-bold">아직 쌓인 오답이 없습니다</p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              채점 모드에서 틀린 문항이 나오면 이곳에 누적됩니다. 미작성과 판독불가는 포함하지 않습니다.
+            </p>
+            <Link
+              href="/"
+              className="inline-block mt-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold"
+            >
+              문제 촬영하러 가기
+            </Link>
+          </section>
+        ) : (
+          <>
+            <section className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold">취약 개념</h2>
+                <span className="text-xs font-semibold text-slate-400">오답 {notes.length}개</span>
+              </div>
+              <ul className="space-y-2.5">
+                {concepts.slice(0, 5).map((item) => (
+                  <li key={item.concept}>
+                    <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                      <span className="font-semibold text-slate-700 dark:text-slate-200 truncate">{item.concept}</span>
+                      <span className="text-slate-400 shrink-0">{item.count}회</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full"
+                        style={{ width: `${Math.max(8, (item.count / maxConcept) * 100)}%` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <h2 className="text-sm font-bold">오답 패턴</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {patterns.map((item) => (
+                  <div
+                    key={item.pattern}
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3"
+                  >
+                    <p className="text-[11px] text-slate-400">{item.label}</p>
+                    <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-1">{item.count}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <button
+                type="button"
+                onClick={requestDiagnosis}
+                disabled={loading}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-2xl text-sm font-bold"
+              >
+                {loading ? "진단 중..." : "AI 진단 받기"}
+              </button>
+              {errorMsg && <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">{errorMsg}</p>}
+              {report && (
+                <div className="space-y-3 pt-1">
+                  <article className="rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 p-3.5 space-y-1.5">
+                    <h3 className="text-xs font-bold text-indigo-700 dark:text-indigo-300">학습 상태 총평</h3>
+                    <div className="text-sm leading-relaxed">
+                      <MathText content={report.overall_status} />
+                    </div>
+                  </article>
+                  <article className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 space-y-2">
+                    <h3 className="text-xs font-bold text-slate-500">먼저 보완할 개념</h3>
+                    <ol className="space-y-2">
+                      {report.top_weak_concepts.map((item, index) => (
+                        <li key={`${item.concept}-${index}`} className="text-sm leading-relaxed">
+                          <span className="font-bold">{index + 1}. {item.concept}</span>
+                          {item.reason && (
+                            <span className="block text-slate-600 dark:text-slate-300 mt-0.5">
+                              <MathText content={item.reason} />
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </article>
+                  <article className="rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3.5 space-y-1.5">
+                    <h3 className="text-xs font-bold text-amber-800 dark:text-amber-200">부모님 학습 처방</h3>
+                    <div className="text-sm leading-relaxed">
+                      <MathText content={report.prescription} />
+                    </div>
+                  </article>
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-sm font-bold">오답 노트</h2>
+                <button type="button" onClick={handleClear} className="text-xs font-semibold text-slate-400">
+                  전체 삭제
+                </button>
+              </div>
+              {notes.map((note, index) => (
+                <article
+                  key={`${note.timestamp}-${index}`}
+                  className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-extrabold">{note.problem_number || `${index + 1}번`}</span>
+                    <span className="text-[11px] font-bold text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-full">
+                      {errorPatternLabel(classifyErrorPattern(note.error_analysis))}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-600 dark:text-indigo-300">{note.concept}</p>
+                  <div className="text-sm">
+                    <MathText content={note.problem_text} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5">
+                      <span className="block text-slate-400 mb-0.5">아이 답</span>
+                      <MathText content={note.student_answer} />
+                    </div>
+                    <div className="rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 p-2.5">
+                      <span className="block text-indigo-400 mb-0.5">정답</span>
+                      <MathText content={note.correct_answer} />
+                    </div>
+                  </div>
+                  {note.error_analysis && (
+                    <div className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                      <MathText content={note.error_analysis} />
+                    </div>
+                  )}
+                </article>
+              ))}
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
