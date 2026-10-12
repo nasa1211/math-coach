@@ -16,6 +16,28 @@ export interface WrongNote {
 
 export type ErrorPattern = "calculation" | "concept" | "reading" | "other";
 
+export type NotePeriod = "all" | "7d" | "30d";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+export function periodCutoff(period: NotePeriod, now = Date.now()): number | null {
+  if (period === "all") return null;
+  const days = period === "7d" ? 7 : 30;
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  return start.getTime() - (days - 1) * MS_PER_DAY;
+}
+
+export function filterNotesByPeriod(
+  notes: WrongNote[],
+  period: NotePeriod,
+  now = Date.now(),
+): WrongNote[] {
+  const cutoff = periodCutoff(period, now);
+  if (cutoff === null) return notes;
+  return notes.filter((note) => note.timestamp >= cutoff);
+}
+
 export interface GradeProblem extends GradeFields {
   problem_number?: string;
   problem_text?: string;
@@ -127,20 +149,48 @@ function notesFromHistory(raw: string | null): WrongNote[] {
   }
 }
 
+const noteListeners = new Set<() => void>();
+let noteSnapshot: WrongNote[] = [];
+let noteSnapshotKey: string | null | undefined;
+
 function readStorage(): WrongNote[] | null {
   if (typeof window === "undefined") return [];
   return parseNotes(localStorage.getItem(WRONG_NOTE_KEY));
 }
 
-function writeStorage(notes: WrongNote[]) {
-  localStorage.setItem(WRONG_NOTE_KEY, JSON.stringify(notes));
+function writeStorage(notes: WrongNote[], notify = true) {
+  const raw = JSON.stringify(notes);
+  localStorage.setItem(WRONG_NOTE_KEY, raw);
+  noteSnapshot = notes;
+  noteSnapshotKey = raw;
+  if (!notify) return;
+  for (const listener of noteListeners) listener();
+}
+
+export function subscribeWrongNotes(listener: () => void) {
+  noteListeners.add(listener);
+  return () => {
+    noteListeners.delete(listener);
+  };
+}
+
+export function getWrongNotesSnapshot(): WrongNote[] | null {
+  const raw = localStorage.getItem(WRONG_NOTE_KEY);
+  if (noteSnapshotKey !== undefined && raw === noteSnapshotKey) return noteSnapshot;
+  noteSnapshot = loadWrongNotes();
+  noteSnapshotKey = localStorage.getItem(WRONG_NOTE_KEY);
+  return noteSnapshot;
+}
+
+export function getWrongNotesServerSnapshot(): WrongNote[] | null {
+  return null;
 }
 
 export function loadWrongNotes(): WrongNote[] {
   const stored = readStorage();
   if (stored) return stored;
   const seeded = notesFromHistory(localStorage.getItem(HISTORY_KEY));
-  writeStorage(seeded);
+  writeStorage(seeded, false);
   return seeded;
 }
 
