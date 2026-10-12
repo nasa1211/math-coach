@@ -109,7 +109,7 @@ export default function ReportPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans ios-safe-content-pb">
       <header className="sticky top-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <div className="max-w-xl mx-auto px-2 sm:px-0 py-3 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">오답 학습 진단</h1>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">틀린 문항만 모아 취약 개념을 봅니다.</p>
@@ -123,7 +123,7 @@ export default function ReportPage() {
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 py-4 space-y-4">
+      <main className="max-w-xl mx-auto px-2 sm:px-0 py-4 sm:py-6 space-y-4">
         {notes === null ? (
           <p className="text-sm text-slate-400">오답 기록을 불러오는 중입니다.</p>
         ) : notes.length === 0 ? (
@@ -141,7 +141,7 @@ export default function ReportPage() {
           </section>
         ) : (
           <>
-            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold">취약 개념 TOP 3</h2>
                 <span className="text-xs font-semibold text-slate-400">오답 {filtered.length}개</span>
@@ -168,13 +168,13 @@ export default function ReportPage() {
               )}
             </section>
 
-            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
               <h2 className="text-sm font-bold">오답 패턴</h2>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {patternCards.map((item) => (
                   <div
                     key={item.pattern}
-                    className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3"
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3.5 sm:p-5"
                   >
                     <p className="text-[11px] text-slate-400">{item.label}</p>
                     <p className="text-lg font-extrabold text-slate-900 dark:text-white mt-1">{share(item.count)}%</p>
@@ -184,7 +184,7 @@ export default function ReportPage() {
               </div>
             </section>
 
-            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
               <button
                 type="button"
                 onClick={requestDiagnosis}
@@ -196,13 +196,13 @@ export default function ReportPage() {
               {errorMsg && <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">{errorMsg}</p>}
               {report && (
                 <div className="space-y-3 pt-1">
-                  <article className="rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 p-3.5 space-y-1.5">
+                  <article className="rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 p-3.5 sm:p-5 space-y-1.5">
                     <h3 className="text-xs font-bold text-indigo-700 dark:text-indigo-300">학습 상태 총평</h3>
                     <div className="text-sm leading-relaxed">
                       <MathText content={report.overall_status} />
                     </div>
                   </article>
-                  <article className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 space-y-2">
+                  <article className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 sm:p-5 space-y-2">
                     <h3 className="text-xs font-bold text-slate-500">먼저 보완할 개념</h3>
                     <ol className="space-y-2">
                       {report.top_weak_concepts.map((item, index) => (
@@ -217,7 +217,7 @@ export default function ReportPage() {
                       ))}
                     </ol>
                   </article>
-                  <article className="rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3.5 space-y-1.5">
+                  <article className="rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-3.5 sm:p-5 space-y-1.5">
                     <h3 className="text-xs font-bold text-amber-800 dark:text-amber-200">부모님 학습 처방</h3>
                     <div className="text-sm leading-relaxed">
                       <MathText content={report.prescription} />
@@ -270,7 +270,7 @@ export default function ReportPage() {
                   {visibleNotes.map((note, index) => (
                     <article
                       key={`${note.timestamp}-${note.problem_number}-${index}`}
-                      className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2"
+                      className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-extrabold">{note.problem_number || `${index + 1}번`}</span>
@@ -282,12 +282,12 @@ export default function ReportPage() {
                       <div className="text-sm">
                         <MathText content={note.problem_text} />
                       </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5">
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3.5 sm:p-5">
                           <span className="block text-slate-400 mb-0.5">아이 답</span>
                           <MathText content={note.student_answer} />
                         </div>
-                        <div className="rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 p-2.5">
+                        <div className="rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 p-3.5 sm:p-5">
                           <span className="block text-indigo-400 mb-0.5">정답</span>
                           <MathText content={note.correct_answer} />
                         </div>
