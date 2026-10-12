@@ -903,12 +903,12 @@ export default function MathCoachPage() {
 
         {activeTab === "history" && (
           <div className="max-w-xl mx-auto space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between pb-2 px-1">
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <span>🕒</span>
+            <div className="flex items-center justify-between gap-2 pb-2 px-1">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-x-2 gap-y-1 flex-wrap">
+                  <span className="shrink-0">🕒</span>
                   <span>최근 코칭 기록</span>
-                  <span className="text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="shrink-0 whitespace-nowrap text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-semibold">
                     {historyList.length}개
                   </span>
                 </h3>
@@ -927,7 +927,7 @@ export default function MathCoachPage() {
                 <button
                   type="button"
                   onClick={handleClearAllHistory}
-                  className="text-xs font-semibold text-slate-400 hover:text-red-600 dark:hover:text-red-400 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+                  className="shrink-0 whitespace-nowrap text-xs font-semibold text-slate-400 hover:text-red-600 dark:hover:text-red-400 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
                 >
                   전체 삭제
                 </button>
