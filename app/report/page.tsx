@@ -141,7 +141,7 @@ export default function ReportPage() {
           </section>
         ) : (
           <>
-            <section className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-bold">취약 개념 TOP 3</h2>
                 <span className="text-xs font-semibold text-slate-400">오답 {filtered.length}개</span>
@@ -168,7 +168,7 @@ export default function ReportPage() {
               )}
             </section>
 
-            <section className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
               <h2 className="text-sm font-bold">오답 패턴</h2>
               <div className="grid grid-cols-2 gap-2">
                 {patternCards.map((item) => (
@@ -184,7 +184,7 @@ export default function ReportPage() {
               </div>
             </section>
 
-            <section className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-3">
               <button
                 type="button"
                 onClick={requestDiagnosis}
@@ -228,9 +228,13 @@ export default function ReportPage() {
             </section>
 
             <section className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="text-sm font-bold">오답 노트</h2>
-                <button type="button" onClick={handleClear} className="text-xs font-semibold text-slate-400 min-h-11 px-2">
+              <div className="flex items-center justify-between gap-2 px-1">
+                <h2 className="text-sm font-bold min-w-0">오답 노트</h2>
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="shrink-0 whitespace-nowrap text-xs font-semibold text-slate-400 min-h-11 px-2 py-1.5"
+                >
                   전체 삭제
                 </button>
               </div>
@@ -266,7 +270,7 @@ export default function ReportPage() {
                   {visibleNotes.map((note, index) => (
                     <article
                       key={`${note.timestamp}-${note.problem_number}-${index}`}
-                      className="bg-white dark:bg-slate-900 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2"
+                      className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-3xl border border-slate-200 dark:border-slate-800 space-y-2"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-extrabold">{note.problem_number || `${index + 1}번`}</span>
