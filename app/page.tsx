@@ -780,15 +780,15 @@ export default function MathCoachPage() {
                     ) : (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs sm:text-sm">
-                          <div className="bg-slate-50 dark:bg-slate-800/60 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
+                          <div className="min-w-0 bg-slate-50 dark:bg-slate-800/60 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-800">
                             <span className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 block mb-0.5">아이의 답</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-200 text-sm sm:text-base">
+                            <span className="block min-w-0 font-bold text-slate-700 dark:text-slate-200 text-sm sm:text-base">
                               <MathText content={prob.student_answer || ""} />
                             </span>
                           </div>
-                          <div className="bg-indigo-50/50 dark:bg-indigo-950/40 p-2.5 sm:p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                          <div className="min-w-0 bg-indigo-50/50 dark:bg-indigo-950/40 p-2.5 sm:p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                             <span className="text-[11px] sm:text-xs text-indigo-400 dark:text-indigo-300 block mb-0.5">실제 정답</span>
-                            <span className="font-bold text-indigo-700 dark:text-indigo-300 text-sm sm:text-base">
+                            <span className="block min-w-0 font-bold text-indigo-700 dark:text-indigo-300 text-sm sm:text-base">
                               <MathText content={prob.correct_answer} />
                             </span>
                           </div>

@@ -4,6 +4,7 @@
 import React from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { splitInlineMathList } from "@/lib/inlineMathBreak";
 
 interface MathTextProps {
   content: string;
@@ -28,6 +29,50 @@ function preprocessText(str: string): string {
   res = res.replace(/([^\n])\s*(\d+단계:)/g, "$1\n$2");
 
   return res;
+}
+
+function renderKatexInline(math: string): string | null {
+  try {
+    return katex.renderToString(cleanLatexForKatex(math), {
+      displayMode: false,
+      throwOnError: false,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function renderInlineMath(math: string, key: number) {
+  const pieces = splitInlineMathList(math);
+  if (pieces.length <= 1) {
+    const html = renderKatexInline(math);
+    if (!html) return <span key={key}>{`$${math}$`}</span>;
+    return (
+      <span
+        key={key}
+        className="inline mx-0.5 align-middle"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  }
+
+  return (
+    <span key={key} className="inline">
+      {pieces.map((piece, pieceIndex) => {
+        const html = renderKatexInline(piece);
+        return (
+          <React.Fragment key={pieceIndex}>
+            {pieceIndex > 0 ? ", " : null}
+            {html ? (
+              <span className="inline align-middle" dangerouslySetInnerHTML={{ __html: html }} />
+            ) : (
+              <span>{piece}</span>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </span>
+  );
 }
 
 /**
@@ -81,22 +126,7 @@ export default function MathText({ content, className = "" }: MathTextProps) {
 
               // 2. 인라인 수식 ($...$)
               if (part.startsWith("$") && part.endsWith("$")) {
-                const math = cleanLatexForKatex(part.slice(1, -1).trim());
-                try {
-                  const html = katex.renderToString(math, {
-                    displayMode: false,
-                    throwOnError: false,
-                  });
-                  return (
-                    <span
-                      key={index}
-                      className="inline mx-0.5 align-middle"
-                      dangerouslySetInnerHTML={{ __html: html }}
-                    />
-                  );
-                } catch {
-                  return <span key={index}>{part}</span>;
-                }
+                return renderInlineMath(part.slice(1, -1).trim(), index);
               }
 
               // 3. 일반 텍스트

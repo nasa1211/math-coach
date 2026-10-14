@@ -283,11 +283,11 @@ export default function ReportPage() {
                         <MathText content={note.problem_text} />
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3.5 sm:p-5">
+                        <div className="min-w-0 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3.5 sm:p-5">
                           <span className="block text-slate-400 mb-0.5">아이 답</span>
                           <MathText content={note.student_answer} />
                         </div>
-                        <div className="rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 p-3.5 sm:p-5">
+                        <div className="min-w-0 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 p-3.5 sm:p-5">
                           <span className="block text-indigo-400 mb-0.5">정답</span>
                           <MathText content={note.correct_answer} />
                         </div>
