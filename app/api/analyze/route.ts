@@ -4,21 +4,24 @@ import { cookies } from "next/headers";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
 import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
 import { ANALYSIS_FAILED_ERROR, ANALYSIS_FORMAT_ERROR, analysisProblems } from "@/lib/analysisResult";
+import { ANALYSIS_TIMEOUT_MESSAGE, SERVER_ANALYSIS_TIMEOUT_MS } from "@/lib/analysisTimeout";
 import { buildAnalyzePrompt, parseAnalysisMode } from "@/lib/analyzePrompt";
-import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
+import { MODEL_ID, parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
+import { isModelTimeout } from "@/lib/modelTimeout";
+import { collectLogSecrets, sanitizeForLog, usageFields } from "@/lib/safeLog";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const MODEL_BY_CHOICE: Record<ModelChoice, { id: string; generationConfig: GenerationConfig }> = {
   pro: {
-    id: "gemini-3.1-pro-preview",
+    id: MODEL_ID.pro,
     generationConfig: {
       responseMimeType: "application/json",
       thinkingConfig: { thinkingLevel: "medium" },
     } as GenerationConfig,
   },
   flash: {
-    id: "gemini-3.6-flash",
+    id: MODEL_ID.flash,
     generationConfig: {
       responseMimeType: "application/json",
     },
@@ -59,15 +62,17 @@ function fixMath(str: string) {
   return res;
 }
 
-function fixMathInObject(obj: any): any {
-  if (typeof obj === 'string') {
+function fixMathInObject(obj: unknown): unknown {
+  if (typeof obj === "string") {
     return fixMath(obj);
-  } else if (Array.isArray(obj)) {
-    return obj.map(item => fixMathInObject(item));
-  } else if (obj !== null && typeof obj === 'object') {
-    const newObj: any = {};
-    for (const key in obj) {
-      newObj[key] = fixMathInObject(obj[key]);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => fixMathInObject(item));
+  }
+  if (obj !== null && typeof obj === "object") {
+    const newObj: Record<string, unknown> = {};
+    for (const key of Object.keys(obj)) {
+      newObj[key] = fixMathInObject((obj as Record<string, unknown>)[key]);
     }
     return newObj;
   }
@@ -155,22 +160,38 @@ export async function POST(req: NextRequest) {
 
     const prompt = buildAnalyzePrompt(mode);
 
-    const model = genAI.getGenerativeModel({
-      model: selectedModel.id,
-      generationConfig: selectedModel.generationConfig,
-    });
+    const model = genAI.getGenerativeModel(
+      {
+        model: selectedModel.id,
+        generationConfig: selectedModel.generationConfig,
+      },
+      { timeout: SERVER_ANALYSIS_TIMEOUT_MS },
+    );
 
     const result = await model.generateContent([prompt, imagePart]);
     const responseText = visibleAnswerText(result.response);
     const parsedData = safeJsonParse(responseText);
     const problems = analysisProblems(parsedData);
-    if (!problems) {
+    const usage = usageFields(result.response.usageMetadata);
+    if (!problems || !parsedData || typeof parsedData !== "object" || Array.isArray(parsedData)) {
+      console.info(JSON.stringify({ event: "analyze_format_error", model: selectedModel.id, ...usage }));
       return NextResponse.json({ error: ANALYSIS_FORMAT_ERROR }, { status: 502 });
     }
 
+    console.info(
+      JSON.stringify({
+        event: "analyze_complete",
+        model: selectedModel.id,
+        problemCount: problems.length,
+        ...usage,
+      }),
+    );
     return NextResponse.json({ ...parsedData, mode, problems, modelUsed: selectedModel.id });
   } catch (error: unknown) {
-    console.error("분석 실패:", error);
+    console.error(sanitizeForLog(error, collectLogSecrets()));
+    if (isModelTimeout(error)) {
+      return NextResponse.json({ error: ANALYSIS_TIMEOUT_MESSAGE }, { status: 504 });
+    }
     return NextResponse.json({ error: ANALYSIS_FAILED_ERROR }, { status: 500 });
   }
 }

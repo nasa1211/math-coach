@@ -1,15 +1,37 @@
 "use client";
 
-import { useState, useEffect, useRef, ChangeEvent } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore, ChangeEvent } from "react";
 import Link from "next/link";
 import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
 import { shareOrDownloadElement } from "@/utils/exportImage";
 import { fitWithin } from "@/utils/fitImageSize";
+import { fetchWithTimeout } from "@/lib/analysisTimeout";
 import { ANALYSIS_FORMAT_ERROR } from "@/lib/analysisResult";
-import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
+import {
+  readDarkClassSnapshot,
+  readFontScaleSnapshot,
+  readModelChoiceSnapshot,
+  subscribeClientSettings,
+  subscribeDarkClass,
+  writeDarkClass,
+  writeFontScale,
+  writeModelChoice,
+} from "@/lib/clientSettings";
+import {
+  clearHistoryRecords,
+  deleteHistoryRecord,
+  getHistoryServerSnapshot,
+  getHistorySnapshot,
+  prependHistoryRecord,
+  subscribeHistory,
+  type StoredHistoryRecord,
+} from "@/lib/historyStore";
+import { HISTORY_ALL_DELETE_CONFIRM, HISTORY_ITEM_DELETE_CONFIRM } from "@/lib/recordDeletion";
+import type { ModelChoice } from "@/lib/modelChoice";
+import type { SaveResult } from "@/lib/storageFailure";
 import { gradeBadge, gradeKind, gradeSummary, historyScoreLabel } from "@/utils/gradeStatus";
-import { appendWrongNotes } from "@/lib/wrongNote";
+import { StorageSaveError, appendWrongNotes } from "@/lib/wrongNote";
 
 interface ProblemItem {
   problem_number: string;
@@ -34,13 +56,8 @@ interface AnalysisResponse {
   modelUsed?: string;
 }
 
-// 히스토리 항목 인터페이스
-interface HistoryRecord {
-  id: string;
-  timestamp: number;
-  mode: "grade" | "guide";
+interface HistoryRecord extends StoredHistoryRecord {
   problems: ProblemItem[];
-  summaryTitle: string;
 }
 
 // 탭 타입
@@ -62,8 +79,32 @@ const GUIDE_LOADING_STEPS = [
   "아이가 자주 빠지는 함정과 부모 지도 팁을 정리하고 있습니다...",
 ];
 
-const STORAGE_KEY = "math_coach_history_v1";
-const MODEL_STORAGE_KEY = "math_coach_model";
+function AnalysisProgress({ mode }: { mode: "grade" | "guide" }) {
+  const steps = mode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
+  const [stepIdx, setStepIdx] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStepIdx((prev) => (prev + 1) % steps.length);
+    }, 1600);
+    return () => clearInterval(interval);
+  }, [steps.length]);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl border border-indigo-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors text-center">
+      <div className="relative flex items-center justify-center w-20 h-20 mx-auto mb-4">
+        <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-950 border-t-indigo-600 dark:border-t-indigo-400 animate-spin" />
+        <span className="text-3xl animate-pulse">{mode === "guide" ? "📖" : "🤖"}</span>
+      </div>
+      <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
+        {mode === "guide" ? "문제 원리와 지도 팁을 정리하고 있습니다" : "손글씨와 문제를 정밀 분석하고 있습니다"}
+      </h3>
+      <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400 font-medium mt-2 min-h-[1.5rem] transition-all">
+        {steps[stepIdx]}
+      </p>
+    </div>
+  );
+}
 
 function ProblemGradeBadge({ problem }: { problem: ProblemItem }) {
   const badge = gradeBadge(gradeKind(problem));
@@ -142,18 +183,19 @@ export default function MathCoachPage() {
   const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
   const [isCropperOpen, setIsCropperOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [stepIdx, setStepIdx] = useState<number>(0);
   const [results, setResults] = useState<ProblemItem[] | null>(null);
   const [resultMode, setResultMode] = useState<"grade" | "guide">("grade");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [exportingIdx, setExportingIdx] = useState<number | "all" | null>(null);
 
-  const [fontScale, setFontScale] = useState<string>("1.0");
-  const [modelChoice, setModelChoice] = useState<ModelChoice>("flash");
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
-
-  // 최근 기록(히스토리) 상태
-  const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
+  const fontScale = useSyncExternalStore(subscribeClientSettings, readFontScaleSnapshot, () => "1.0");
+  const modelChoice = useSyncExternalStore(subscribeClientSettings, readModelChoiceSnapshot, () => "flash" as ModelChoice);
+  const isDarkMode = useSyncExternalStore(subscribeDarkClass, readDarkClassSnapshot, () => false);
+  const historyList = useSyncExternalStore(
+    subscribeHistory,
+    getHistorySnapshot,
+    getHistoryServerSnapshot,
+  ) as HistoryRecord[];
 
   // 하단 탭 표시 여부
   const [showBottomNav, setShowBottomNav] = useState(true);
@@ -162,43 +204,10 @@ export default function MathCoachPage() {
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
-  cardRefs.current = [];
-
-  const currentLoadingSteps =
-    activeMode === "guide" ? GUIDE_LOADING_STEPS : GRADE_LOADING_STEPS;
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setHistoryList(JSON.parse(saved));
-      }
-
-      const savedModel = parseModelChoice(localStorage.getItem(MODEL_STORAGE_KEY));
-      setModelChoice(savedModel);
-
-      const savedScale = localStorage.getItem("font_scale");
-      if (savedScale) {
-        setFontScale(savedScale);
-        document.documentElement.style.setProperty("--font-scale", savedScale);
-      }
-      const dark = document.documentElement.classList.contains("dark");
-      setIsDarkMode(dark);
-    } catch (e) {
-      console.error("초기 데이터 로드 실패:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (loading) {
-      setStepIdx(0);
-      interval = setInterval(() => {
-        setStepIdx((prev) => (prev + 1) % currentLoadingSteps.length);
-      }, 1600);
-    }
-    return () => clearInterval(interval);
-  }, [loading, currentLoadingSteps.length]);
+    document.documentElement.style.setProperty("--font-scale", fontScale);
+  }, [fontScale]);
 
   useEffect(() => {
     const checkDesktop = () => {
@@ -237,27 +246,20 @@ export default function MathCoachPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isDesktop]);
 
+  const reportSaveFailure = (result: SaveResult) => {
+    if (!result.ok) alert(result.message);
+  };
+
   const toggleDarkMode = () => {
-    const nextDark = !isDarkMode;
-    setIsDarkMode(nextDark);
-    if (nextDark) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    }
+    reportSaveFailure(writeDarkClass(!isDarkMode));
   };
 
   const changeModelChoice = (choice: ModelChoice) => {
-    setModelChoice(choice);
-    localStorage.setItem(MODEL_STORAGE_KEY, choice);
+    reportSaveFailure(writeModelChoice(choice));
   };
 
   const changeFontScale = (scale: string) => {
-    setFontScale(scale);
-    localStorage.setItem("font_scale", scale);
-    document.documentElement.style.setProperty("--font-scale", scale);
+    reportSaveFailure(writeFontScale(scale));
   };
 
   const handleLogout = async () => {
@@ -267,8 +269,8 @@ export default function MathCoachPage() {
     window.location.reload();
   };
 
-  const saveToHistory = (mode: "grade" | "guide", problems: ProblemItem[]) => {
-    if (!problems || problems.length === 0) return;
+  const saveToHistory = (mode: "grade" | "guide", problems: ProblemItem[]): SaveResult => {
+    if (!problems || problems.length === 0) return { ok: true };
 
     const firstProb = problems[0];
     const summaryTitle =
@@ -285,15 +287,7 @@ export default function MathCoachPage() {
       summaryTitle,
     };
 
-    setHistoryList((prev) => {
-      const updated = [newRecord, ...prev].slice(0, 30);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch (e) {
-        console.error("히스토리 저장 실패:", e);
-      }
-      return updated;
-    });
+    return prependHistoryRecord(newRecord);
   };
 
   const handleLoadHistoryItem = (item: HistoryRecord) => {
@@ -305,19 +299,13 @@ export default function MathCoachPage() {
 
   const handleDeleteHistoryItem = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm("이 분석 기록을 삭제하시겠습니까?")) return;
-
-    setHistoryList((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
+    if (!confirm(HISTORY_ITEM_DELETE_CONFIRM)) return;
+    reportSaveFailure(deleteHistoryRecord(id));
   };
 
   const handleClearAllHistory = () => {
-    if (!confirm("모든 분석 기록을 삭제하시겠습니까?")) return;
-    setHistoryList([]);
-    localStorage.removeItem(STORAGE_KEY);
+    if (!confirm(HISTORY_ALL_DELETE_CONFIRM)) return;
+    reportSaveFailure(clearHistoryRecords());
   };
 
   const showPreview = (next: string) => {
@@ -378,7 +366,7 @@ export default function MathCoachPage() {
       formData.append("mode", activeMode);
       formData.append("modelChoice", modelChoice);
 
-      const res = await fetch("/api/analyze", {
+      const res = await fetchWithTimeout("/api/analyze", {
         method: "POST",
         credentials: "same-origin",
         headers: {
@@ -405,11 +393,16 @@ export default function MathCoachPage() {
       setResults(parsedProblems);
       setResultMode(appliedMode);
       if (appliedMode === "grade") {
-        appendWrongNotes(parsedProblems, Date.now());
+        try {
+          appendWrongNotes(parsedProblems, Date.now());
+        } catch (error) {
+          if (!(error instanceof StorageSaveError)) throw error;
+          alert(error.message);
+        }
       }
-      saveToHistory(appliedMode, parsedProblems);
+      reportSaveFailure(saveToHistory(appliedMode, parsedProblems));
     } catch (err: unknown) {
-      console.error("전송 에러:", err);
+      console.error("전송 에러:", err instanceof Error ? err.message : "");
       const message =
         err instanceof Error
           ? err.message
@@ -433,7 +426,7 @@ export default function MathCoachPage() {
         `수학코치_${probNum}_리포트`,
         `[수학 홈코치] ${probNum} 분석 리포트`
       );
-    } catch (e) {
+    } catch {
       alert("이미지 저장/공유 중 오류가 발생했습니다.");
     } finally {
       setExportingIdx(null);
@@ -450,7 +443,7 @@ export default function MathCoachPage() {
         `수학코치_전체분석결과`,
         `[수학 홈코치] 전체 문항 채점 & 코칭 리포트`
       );
-    } catch (e) {
+    } catch {
       alert("전체 리포트 저장/공유 중 오류가 발생했습니다.");
     } finally {
       setExportingIdx(null);
@@ -536,6 +529,7 @@ export default function MathCoachPage() {
               {preview ? (
                 <div className="space-y-3">
                   <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-3">
+                    {/* 방금 고른 사진의 data/blob URL이라 next/image 최적화 대상이 아니다. */}
                     <img
                       src={preview}
                       alt="선택된 문제"
@@ -633,24 +627,7 @@ export default function MathCoachPage() {
         {activeTab === "result" && (
           <div className="space-y-4 sm:space-y-6 max-w-2xl mx-auto animate-fadeIn">
             {loading ? (
-              <div className="bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-3xl border border-indigo-100 dark:border-slate-800 shadow-sm space-y-6 transition-colors text-center">
-                <div className="relative flex items-center justify-center w-20 h-20 mx-auto mb-4">
-                  <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-950 border-t-indigo-600 dark:border-t-indigo-400 animate-spin" />
-                  <span className="text-3xl animate-pulse">
-                    {activeMode === "guide" ? "📖" : "🤖"}
-                  </span>
-                </div>
-
-                <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">
-                  {activeMode === "guide"
-                    ? "문제 원리와 지도 팁을 정리하고 있습니다"
-                    : "손글씨와 문제를 정밀 분석하고 있습니다"}
-                </h3>
-
-                <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400 font-medium mt-2 min-h-[1.5rem] transition-all">
-                  {currentLoadingSteps[stepIdx]}
-                </p>
-              </div>
+              <AnalysisProgress mode={activeMode} />
             ) : !errorMsg && results && results.length > 0 ? (
               <div className="space-y-4 sm:space-y-6" ref={reportContainerRef}>
                 <div className="flex flex-wrap items-center justify-between pb-2 sm:pb-3 border-b border-slate-200 dark:border-slate-800 gap-2 px-1">
@@ -913,7 +890,7 @@ export default function MathCoachPage() {
                   </span>
                 </h3>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                  최근 분석한 최대 30개의 코칭 리포트를 보관합니다.
+                  최근 분석한 최대 30개의 코칭 리포트를 보관합니다. 기록을 지워도 오답 노트는 남습니다.
                 </p>
                 <Link
                   href="/report"

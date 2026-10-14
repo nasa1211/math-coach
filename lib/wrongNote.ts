@@ -1,4 +1,7 @@
+import { StorageSaveError, storageFailureMessage } from "@/lib/storageFailure";
 import { gradeKind, type GradeFields } from "@/utils/gradeStatus";
+
+export { StorageSaveError };
 
 export const WRONG_NOTE_KEY = "math_coach_wrong_notes_v1";
 export const HISTORY_KEY = "math_coach_history_v1";
@@ -160,7 +163,11 @@ function readStorage(): WrongNote[] | null {
 
 function writeStorage(notes: WrongNote[], notify = true) {
   const raw = JSON.stringify(notes);
-  localStorage.setItem(WRONG_NOTE_KEY, raw);
+  try {
+    localStorage.setItem(WRONG_NOTE_KEY, raw);
+  } catch (error) {
+    throw new StorageSaveError(storageFailureMessage(error, "notes"));
+  }
   noteSnapshot = notes;
   noteSnapshotKey = raw;
   if (!notify) return;
@@ -190,7 +197,12 @@ export function loadWrongNotes(): WrongNote[] {
   const stored = readStorage();
   if (stored) return stored;
   const seeded = notesFromHistory(localStorage.getItem(HISTORY_KEY));
-  writeStorage(seeded, false);
+  try {
+    writeStorage(seeded, false);
+  } catch (error) {
+    console.error("오답 노트 초기 저장 실패:", error instanceof Error ? error.message : "");
+    return seeded;
+  }
   return seeded;
 }
 

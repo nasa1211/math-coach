@@ -3,9 +3,14 @@
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import MathText from "@/components/MathText";
-import type { DiagnosisReport } from "@/lib/diagnosisReport";
-import { parseModelChoice } from "@/lib/modelChoice";
+import { fetchWithTimeout } from "@/lib/analysisTimeout";
+import { MODEL_STORAGE_KEY } from "@/lib/clientSettings";
+import { diagnosisCacheKey, planDiagnosisRequest, readDiagnosisCache, writeDiagnosisCache } from "@/lib/diagnosisCache";
+import { DIAGNOSIS_PROMPT_VERSION, type DiagnosisReport } from "@/lib/diagnosisReport";
+import { MODEL_ID, parseModelChoice } from "@/lib/modelChoice";
+import { WRONG_NOTE_DELETE_CONFIRM } from "@/lib/recordDeletion";
 import {
+  StorageSaveError,
   classifyErrorPattern,
   clearWrongNotes,
   conceptCounts,
@@ -18,8 +23,6 @@ import {
   type ErrorPattern,
   type NotePeriod,
 } from "@/lib/wrongNote";
-
-const MODEL_STORAGE_KEY = "math_coach_model";
 const NOTE_PAGE_SIZE = 5;
 
 const PERIODS: { id: NotePeriod; label: string }[] = [
@@ -35,6 +38,7 @@ export default function ReportPage() {
   const [period, setPeriod] = useState<NotePeriod>("all");
   const [visibleCount, setVisibleCount] = useState(NOTE_PAGE_SIZE);
   const [report, setReport] = useState<DiagnosisReport | null>(null);
+  const [fromCache, setFromCache] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -60,21 +64,36 @@ export default function ReportPage() {
     setPeriod(next);
     setVisibleCount(NOTE_PAGE_SIZE);
     setReport(null);
+    setFromCache(false);
     setErrorMsg(null);
   };
 
-  const requestDiagnosis = async () => {
+  const requestDiagnosis = async (force: boolean) => {
     if (filtered.length === 0) return;
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch("/api/analyze-report", {
+      const modelChoice = parseModelChoice(localStorage.getItem(MODEL_STORAGE_KEY));
+      const notes = filtered.slice(0, 40);
+      const key = await diagnosisCacheKey({
+        modelId: MODEL_ID[modelChoice],
+        promptVersion: DIAGNOSIS_PROMPT_VERSION,
+        notes,
+      });
+      const cached = readDiagnosisCache(key);
+      if (planDiagnosisRequest(force, cached) === "cache" && cached) {
+        setReport(cached);
+        setFromCache(true);
+        return;
+      }
+
+      const res = await fetchWithTimeout("/api/analyze-report", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          wrongs: filtered.slice(0, 40),
-          modelChoice: parseModelChoice(localStorage.getItem(MODEL_STORAGE_KEY)),
+          wrongs: notes,
+          modelChoice,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as DiagnosisReport & { error?: string };
@@ -84,11 +103,15 @@ export default function ReportPage() {
       if (!data.overall_status || !Array.isArray(data.top_weak_concepts) || !data.prescription) {
         throw new Error("진단 결과 형식이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.");
       }
-      setReport({
+      const nextReport = {
         overall_status: data.overall_status,
         top_weak_concepts: data.top_weak_concepts,
         prescription: data.prescription,
-      });
+      };
+      setReport(nextReport);
+      setFromCache(false);
+      const saved = writeDiagnosisCache(key, nextReport);
+      if (!saved.ok) alert(saved.message);
     } catch (error: unknown) {
       setErrorMsg(error instanceof Error ? error.message : "학습 진단을 마치지 못했습니다.");
     } finally {
@@ -97,9 +120,18 @@ export default function ReportPage() {
   };
 
   const handleClear = () => {
-    if (!confirm("누적된 오답 노트를 모두 삭제할까요?")) return;
-    clearWrongNotes();
+    if (!confirm(WRONG_NOTE_DELETE_CONFIRM)) return;
+    try {
+      clearWrongNotes();
+    } catch (error) {
+      if (error instanceof StorageSaveError) {
+        alert(error.message);
+        return;
+      }
+      throw error;
+    }
     setReport(null);
+    setFromCache(false);
     setErrorMsg(null);
     setVisibleCount(NOTE_PAGE_SIZE);
   };
@@ -112,7 +144,9 @@ export default function ReportPage() {
         <div className="max-w-xl mx-auto px-2 sm:px-0 py-3 flex items-center justify-between gap-3">
           <div>
             <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">오답 학습 진단</h1>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">틀린 문항만 모아 취약 개념을 봅니다.</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+              틀린 문항만 모아 취약 개념을 봅니다. 오답 노트를 지워도 최근 코칭 기록은 남습니다.
+            </p>
           </div>
           <Link
             href="/"
@@ -187,12 +221,17 @@ export default function ReportPage() {
             <section className="bg-white dark:bg-slate-900 p-3.5 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
               <button
                 type="button"
-                onClick={requestDiagnosis}
+                onClick={() => requestDiagnosis(report !== null)}
                 disabled={loading || filtered.length === 0}
                 className="w-full min-h-12 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-2xl text-sm font-bold"
               >
-                {loading ? "진단 중..." : "AI 진단 받기"}
+                {loading ? "진단 중..." : report ? "다시 진단" : "AI 진단 받기"}
               </button>
+              {fromCache && report && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  같은 오답과 같은 모델의 저장된 진단입니다. 다시 진단하면 새로 분석합니다.
+                </p>
+              )}
               {errorMsg && <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">{errorMsg}</p>}
               {report && (
                 <div className="space-y-3 pt-1">

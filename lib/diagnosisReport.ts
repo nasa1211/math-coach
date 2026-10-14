@@ -17,6 +17,9 @@ export const DIAGNOSIS_FORMAT_ERROR =
 export const DIAGNOSIS_FAILED_ERROR =
   "학습 진단을 마치지 못했습니다. 잠시 후 다시 시도해 주세요.";
 
+/** buildDiagnosisPrompt의 지시문을 바꾸면 값을 올려 저장된 진단이 재사용되지 않게 한다. */
+export const DIAGNOSIS_PROMPT_VERSION = "v1";
+
 const FIELD_LIMIT = 400;
 
 function clip(value: string): string {

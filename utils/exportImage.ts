@@ -56,12 +56,12 @@ export async function shareOrDownloadElement(
     link.click();
 
     return { success: true, method: "download" };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 사용자가 모바일 공유창에서 '취소'를 누른 경우는 에러로 처리하지 않음
-    if (error.name === "AbortError") {
+    if (error instanceof Error && error.name === "AbortError") {
       return { success: false, aborted: true };
     }
-    console.error("이미지 내보내기/공유 에러:", error);
+    console.error("이미지 내보내기/공유 에러:", error instanceof Error ? error.message : "");
     throw error;
   }
 }
