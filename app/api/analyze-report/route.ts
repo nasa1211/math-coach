@@ -2,27 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
 import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
+import { ANALYSIS_TIMEOUT_MESSAGE, SERVER_ANALYSIS_TIMEOUT_MS } from "@/lib/analysisTimeout";
 import {
   DIAGNOSIS_FAILED_ERROR,
   DIAGNOSIS_FORMAT_ERROR,
   buildDiagnosisPrompt,
   parseDiagnosisReport,
 } from "@/lib/diagnosisReport";
-import { parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
+import { MODEL_ID, parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
+import { isModelTimeout } from "@/lib/modelTimeout";
+import { collectLogSecrets, sanitizeForLog, usageFields } from "@/lib/safeLog";
 import type { WrongNote } from "@/lib/wrongNote";
 
 export const maxDuration = 60;
 
 const MODEL_BY_CHOICE: Record<ModelChoice, { id: string; generationConfig: GenerationConfig }> = {
   pro: {
-    id: "gemini-3.1-pro-preview",
+    id: MODEL_ID.pro,
     generationConfig: {
       responseMimeType: "application/json",
       thinkingConfig: { thinkingLevel: "medium" },
     } as GenerationConfig,
   },
   flash: {
-    id: "gemini-3.6-flash",
+    id: MODEL_ID.flash,
     generationConfig: {
       responseMimeType: "application/json",
     },
@@ -123,20 +126,36 @@ export async function POST(req: NextRequest) {
 
     const modelChoice = parseModelChoice(body?.modelChoice);
     const selectedModel = MODEL_BY_CHOICE[modelChoice];
-    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({
-      model: selectedModel.id,
-      generationConfig: selectedModel.generationConfig,
-    });
+    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel(
+      {
+        model: selectedModel.id,
+        generationConfig: selectedModel.generationConfig,
+      },
+      { timeout: SERVER_ANALYSIS_TIMEOUT_MS },
+    );
 
     const result = await model.generateContent(buildDiagnosisPrompt(wrongs));
+    const usage = usageFields(result.response.usageMetadata);
     const report = parseDiagnosisReport(safeJsonParse(visibleAnswerText(result.response)));
     if (!report) {
+      console.info(JSON.stringify({ event: "diagnosis_format_error", model: selectedModel.id, noteCount: wrongs.length, ...usage }));
       return NextResponse.json({ error: DIAGNOSIS_FORMAT_ERROR }, { status: 502 });
     }
 
+    console.info(
+      JSON.stringify({
+        event: "diagnosis_complete",
+        model: selectedModel.id,
+        noteCount: wrongs.length,
+        ...usage,
+      }),
+    );
     return NextResponse.json({ ...report, modelUsed: selectedModel.id });
   } catch (error: unknown) {
-    console.error("학습 진단 실패:", error);
+    console.error(sanitizeForLog(error, collectLogSecrets()));
+    if (isModelTimeout(error)) {
+      return NextResponse.json({ error: ANALYSIS_TIMEOUT_MESSAGE }, { status: 504 });
+    }
     return NextResponse.json({ error: DIAGNOSIS_FAILED_ERROR }, { status: 500 });
   }
 }
