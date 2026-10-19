@@ -529,7 +529,7 @@ export default function MathCoachPage() {
               {preview ? (
                 <div className="space-y-3">
                   <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-3">
-                    {/* 방금 고른 사진의 data/blob URL이라 next/image 최적화 대상이 아니다. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 방금 고른 사진의 data/blob URL이라 next/image 최적화 대상이 아니다. */}
                     <img
                       src={preview}
                       alt="선택된 문제"

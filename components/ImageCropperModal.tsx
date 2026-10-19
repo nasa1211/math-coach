@@ -95,7 +95,7 @@ export default function ImageCropperModal({
           aspect={undefined} /* 자유 비율 (가로/세로 문제 모양에 맞춤) */
           className="max-h-[75dvh] max-w-full"
         >
-          {/* 자르기 좌표는 원본 img의 naturalWidth가 필요해 next/image로 바꾸지 않는다. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- 자르기 좌표는 원본 img의 naturalWidth가 필요해 next/image로 바꾸지 않는다. */}
           <img
             ref={imgRef}
             alt="크롭 대상 문제집"
