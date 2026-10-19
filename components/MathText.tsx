@@ -63,12 +63,15 @@ function renderInlineMath(math: string, key: number) {
         const html = renderKatexInline(piece);
         return (
           <React.Fragment key={pieceIndex}>
-            {pieceIndex > 0 ? ", " : null}
-            {html ? (
-              <span className="inline align-middle" dangerouslySetInnerHTML={{ __html: html }} />
-            ) : (
-              <span>{piece}</span>
-            )}
+            <span className="whitespace-nowrap">
+              {html ? (
+                <span className="inline align-middle" dangerouslySetInnerHTML={{ __html: html }} />
+              ) : (
+                <span>{piece}</span>
+              )}
+              {pieceIndex < pieces.length - 1 ? "," : null}
+            </span>
+            {pieceIndex < pieces.length - 1 ? " " : null}
           </React.Fragment>
         );
       })}
