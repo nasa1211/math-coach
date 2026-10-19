@@ -41,8 +41,6 @@ export function splitInlineMathList(math: string): string[] {
 
 function isThousandsComma(math: string, index: number): boolean {
   const prev = math[index - 1] ?? "";
-  let next = index + 1;
-  while (next < math.length && /\s/.test(math[next])) next++;
-  const after = math[next] ?? "";
+  const after = math[index + 1] ?? "";
   return /\d/.test(prev) && /\d/.test(after);
 }

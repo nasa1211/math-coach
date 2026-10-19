@@ -9,6 +9,7 @@ import { splitInlineMathList } from "@/lib/inlineMathBreak";
 interface MathTextProps {
   content: string;
   className?: string;
+  inline?: boolean;
 }
 
 /**
@@ -85,8 +86,26 @@ function cleanLatexForKatex(mathStr: string): string {
     .replace(/\\frac\s*([0-9])\s*([0-9])(?![0-9])/g, "\\frac{$1}{$2}");
 }
 
-export default function MathText({ content, className = "" }: MathTextProps) {
+export default function MathText({ content, className = "", inline = false }: MathTextProps) {
   if (!content) return null;
+
+  if (inline) {
+    const parts = content.replace(/\s+/g, " ").split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g);
+    return (
+      <span className={className}>
+        {parts.map((part, index) => {
+          if (!part) return null;
+          if (part.startsWith("$$") && part.endsWith("$$") && part.length > 4) {
+            return renderInlineMath(part.slice(2, -2).trim(), index);
+          }
+          if (part.startsWith("$") && part.endsWith("$") && part.length > 2) {
+            return renderInlineMath(part.slice(1, -1).trim(), index);
+          }
+          return <span key={index}>{part}</span>;
+        })}
+      </span>
+    );
+  }
 
   const fixedContent = preprocessText(content);
   const lines = fixedContent.split("\n");
