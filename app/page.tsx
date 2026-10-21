@@ -8,6 +8,7 @@ import { shareOrDownloadElement } from "@/utils/exportImage";
 import { fitWithin } from "@/utils/fitImageSize";
 import { fetchWithTimeout } from "@/lib/analysisTimeout";
 import { ANALYSIS_FORMAT_ERROR } from "@/lib/analysisResult";
+import { MAX_IMAGE_SIZE } from "@/lib/constants";
 import {
   readDarkClassSnapshot,
   readFontScaleSnapshot,
@@ -125,9 +126,7 @@ function ProblemGradeBadge({ problem }: { problem: ProblemItem }) {
 }
 
 async function compressImage(file: File): Promise<Blob> {
-  const SAFE_LIMIT = 4.0 * 1024 * 1024;
-
-  if (file.name === "cropped.jpg" && file.size <= SAFE_LIMIT) {
+  if (file.name === "cropped.jpg" && file.size <= MAX_IMAGE_SIZE) {
     return file;
   }
 
