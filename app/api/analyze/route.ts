@@ -2,15 +2,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
-import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
+import { SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
 import { ANALYSIS_FAILED_ERROR, ANALYSIS_FORMAT_ERROR, analysisProblems } from "@/lib/analysisResult";
 import { ANALYSIS_TIMEOUT_MESSAGE, SERVER_ANALYSIS_TIMEOUT_MS } from "@/lib/analysisTimeout";
 import { buildAnalyzePrompt, parseAnalysisMode } from "@/lib/analyzePrompt";
 import { MODEL_ID, parseModelChoice, type ModelChoice } from "@/lib/modelChoice";
 import { isModelTimeout } from "@/lib/modelTimeout";
 import { collectLogSecrets, sanitizeForLog, usageFields } from "@/lib/safeLog";
-
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+import { MAX_IMAGE_SIZE, RATE_LIMITS } from "@/lib/constants";
+import { validateServerEnv } from "@/lib/envValidation";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { withGeminiRetry } from "@/lib/geminiRetry";
 
 const MODEL_BY_CHOICE: Record<ModelChoice, { id: string; generationConfig: GenerationConfig }> = {
   pro: {
@@ -105,16 +107,17 @@ function safeJsonParse(rawText: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const passcode = readAccessPasscode();
-    if (!passcode) {
-      return NextResponse.json(
-        { error: "서버 접근 암호(ACCESS_PASSCODE)가 설정되지 않았습니다." },
-        { status: 500 }
-      );
+    // Rate limiting 체크
+    const rateLimitResponse = checkRateLimit(req, RATE_LIMITS.ANALYZE);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
     }
 
+    // 환경 변수 검증 (조기 실패)
+    const { GEMINI_API_KEY, ACCESS_PASSCODE } = validateServerEnv();
+
     const jar = await cookies();
-    if (!sessionMatches(jar.get(SESSION_COOKIE)?.value, passcode)) {
+    if (!sessionMatches(jar.get(SESSION_COOKIE)?.value, ACCESS_PASSCODE)) {
       return NextResponse.json(
         { error: "로그인이 필요합니다. 접근 암호를 다시 입력해 주세요." },
         { status: 401 }
@@ -131,9 +134,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "이미지가 전송되지 않았습니다." }, { status: 400 });
     }
 
-    if (imageFile.size > MAX_IMAGE_BYTES) {
+    if (imageFile.size > MAX_IMAGE_SIZE) {
       return NextResponse.json(
-        { error: "이미지가 너무 큽니다. 문제 영역만 잘라 다시 올려 주세요." },
+        { error: `이미지가 너무 큽니다 (최대 ${Math.round(MAX_IMAGE_SIZE / 1024 / 1024)}MB). 문제 영역만 잘라 다시 올려 주세요.` },
         { status: 400 }
       );
     }
@@ -142,12 +145,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "이미지 파일만 분석할 수 있습니다." }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "GEMINI_API_KEY 환경변수가 설정되지 않았습니다." }, { status: 500 });
-    }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const arrayBuffer = await imageFile.arrayBuffer();
     const base64Data = Buffer.from(arrayBuffer).toString("base64");
 
@@ -168,7 +166,11 @@ export async function POST(req: NextRequest) {
       { timeout: SERVER_ANALYSIS_TIMEOUT_MS },
     );
 
-    const result = await model.generateContent([prompt, imagePart]);
+    // 재시도 로직 적용
+    const result = await withGeminiRetry(
+      () => model.generateContent([prompt, imagePart]),
+      { operationName: "analyze_image" }
+    );
     const responseText = visibleAnswerText(result.response);
     const parsedData = safeJsonParse(responseText);
     const problems = analysisProblems(parsedData);

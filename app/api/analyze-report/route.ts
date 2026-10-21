@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
-import { readAccessPasscode, SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
+import { SESSION_COOKIE, sessionMatches } from "@/lib/accessSession";
 import { ANALYSIS_TIMEOUT_MESSAGE, SERVER_ANALYSIS_TIMEOUT_MS } from "@/lib/analysisTimeout";
 import {
   DIAGNOSIS_FAILED_ERROR,
@@ -13,6 +13,10 @@ import { MODEL_ID, parseModelChoice, type ModelChoice } from "@/lib/modelChoice"
 import { isModelTimeout } from "@/lib/modelTimeout";
 import { collectLogSecrets, sanitizeForLog, usageFields } from "@/lib/safeLog";
 import type { WrongNote } from "@/lib/wrongNote";
+import { RATE_LIMITS } from "@/lib/constants";
+import { validateServerEnv } from "@/lib/envValidation";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { withGeminiRetry } from "@/lib/geminiRetry";
 
 export const maxDuration = 60;
 
@@ -91,16 +95,17 @@ function isWrongNote(value: unknown): value is WrongNote {
 
 export async function POST(req: NextRequest) {
   try {
-    const passcode = readAccessPasscode();
-    if (!passcode) {
-      return NextResponse.json(
-        { error: "서버 접근 암호(ACCESS_PASSCODE)가 설정되지 않았습니다." },
-        { status: 500 }
-      );
+    // Rate limiting 체크
+    const rateLimitResponse = checkRateLimit(req, RATE_LIMITS.ANALYZE);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
     }
 
+    // 환경 변수 검증 (조기 실패)
+    const { GEMINI_API_KEY, ACCESS_PASSCODE } = validateServerEnv();
+
     const jar = await cookies();
-    if (!sessionMatches(jar.get(SESSION_COOKIE)?.value, passcode)) {
+    if (!sessionMatches(jar.get(SESSION_COOKIE)?.value, ACCESS_PASSCODE)) {
       return NextResponse.json(
         { error: "로그인이 필요합니다. 접근 암호를 다시 입력해 주세요." },
         { status: 401 }
@@ -119,14 +124,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "GEMINI_API_KEY 환경변수가 설정되지 않았습니다." }, { status: 500 });
-    }
-
     const modelChoice = parseModelChoice(body?.modelChoice);
     const selectedModel = MODEL_BY_CHOICE[modelChoice];
-    const model = new GoogleGenerativeAI(apiKey).getGenerativeModel(
+    const model = new GoogleGenerativeAI(GEMINI_API_KEY).getGenerativeModel(
       {
         model: selectedModel.id,
         generationConfig: selectedModel.generationConfig,
@@ -134,7 +134,11 @@ export async function POST(req: NextRequest) {
       { timeout: SERVER_ANALYSIS_TIMEOUT_MS },
     );
 
-    const result = await model.generateContent(buildDiagnosisPrompt(wrongs));
+    // 재시도 로직 적용
+    const result = await withGeminiRetry(
+      () => model.generateContent(buildDiagnosisPrompt(wrongs)),
+      { operationName: "analyze_report" }
+    );
     const usage = usageFields(result.response.usageMetadata);
     const report = parseDiagnosisReport(safeJsonParse(visibleAnswerText(result.response)));
     if (!report) {
