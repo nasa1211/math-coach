@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useSyncExternalStore, ChangeEvent } from "react";
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore, ChangeEvent } from "react";
 import Link from "next/link";
 import MathText from "@/components/MathText";
 import ImageCropperModal from "@/components/ImageCropperModal";
@@ -27,6 +27,13 @@ import {
   subscribeHistory,
   type StoredHistoryRecord,
 } from "@/lib/historyStore";
+import {
+  collectHistoryDates,
+  defaultHistoryExportDate,
+  filterHistoryByDate,
+  formatHistoryDayExport,
+  shareHistoryText,
+} from "@/lib/historyExport";
 import { HISTORY_ALL_DELETE_CONFIRM, HISTORY_ITEM_DELETE_CONFIRM } from "@/lib/recordDeletion";
 import type { ModelChoice } from "@/lib/modelChoice";
 import type { SaveResult } from "@/lib/storageFailure";
@@ -197,6 +204,19 @@ export default function MathCoachPage() {
     getHistoryServerSnapshot,
   ) as HistoryRecord[];
 
+  const historyDates = useMemo(() => collectHistoryDates(historyList), [historyList]);
+  const [historyExportDate, setHistoryExportDate] = useState(() =>
+    defaultHistoryExportDate(collectHistoryDates([])),
+  );
+  const [historyExporting, setHistoryExporting] = useState(false);
+  const effectiveHistoryExportDate = useMemo(
+    () =>
+      historyDates.includes(historyExportDate)
+        ? historyExportDate
+        : defaultHistoryExportDate(historyDates),
+    [historyDates, historyExportDate],
+  );
+
   // 하단 탭 표시 여부
   const [showBottomNav, setShowBottomNav] = useState(true);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -306,6 +326,33 @@ export default function MathCoachPage() {
   const handleClearAllHistory = () => {
     if (!confirm(HISTORY_ALL_DELETE_CONFIRM)) return;
     reportSaveFailure(clearHistoryRecords());
+  };
+
+  const handleExportHistoryByDate = async () => {
+    const dayRecords = filterHistoryByDate(historyList, effectiveHistoryExportDate);
+    const text = formatHistoryDayExport(effectiveHistoryExportDate, dayRecords);
+    const title = `수학 홈코치 ${effectiveHistoryExportDate} 기록`;
+    setHistoryExporting(true);
+    try {
+      const result = await shareHistoryText({
+        title,
+        text,
+        fileName: `math-coach-${effectiveHistoryExportDate}`,
+      });
+      if (result.ok) {
+        const message =
+          result.method === "share"
+            ? "공유했습니다."
+            : result.method === "clipboard"
+              ? "클립보드에 복사했습니다."
+              : "텍스트 파일로 저장했습니다.";
+        alert(message);
+      }
+    } catch {
+      alert("내보내기에 실패했습니다.");
+    } finally {
+      setHistoryExporting(false);
+    }
   };
 
   const showPreview = (next: string) => {
@@ -910,6 +957,34 @@ export default function MathCoachPage() {
                 </button>
               )}
             </div>
+
+            {historyList.length > 0 && (
+              <div className="bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-2.5">
+                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">날짜별 내보내기</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={effectiveHistoryExportDate}
+                    onChange={(e) => setHistoryExportDate(e.target.value)}
+                    aria-label="내보낼 날짜"
+                    className="flex-1 min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 px-3 py-2.5 cursor-pointer"
+                  >
+                    {historyDates.map((date) => (
+                      <option key={date} value={date}>
+                        {date}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleExportHistoryByDate}
+                    disabled={historyExporting}
+                    className="shrink-0 whitespace-nowrap px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors cursor-pointer"
+                  >
+                    {historyExporting ? "내보내는 중..." : "날짜별 내보내기"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {historyList.length > 0 ? (
               <div className="space-y-3">
